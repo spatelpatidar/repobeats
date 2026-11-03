@@ -1,0 +1,52 @@
+name: Repobeats
+description: Render a repository activity card (issues, pull requests, pushes, top contributors) as an SVG file. Runs on your runner with your token. No login, no hosted service.
+author: spatelpatidar
+branding:
+  icon: activity
+  color: purple
+
+inputs:
+  token:
+    description: GitHub token used to read repository data. `secrets.GITHUB_TOKEN` works for the current repository. Use a personal access token with read access to contents, issues and pull requests for another private repository. Leave empty for public repositories (60 requests/hour, may hit limits).
+    required: false
+    default: ''
+  user:
+    description: Repository owner. Only needed when `repo` is a bare name. Defaults to the owner of the current repository.
+    required: false
+    default: ''
+  repo:
+    description: Repository as `owner/name`, or a bare name together with `user`. Defaults to the current repository.
+    required: false
+    default: ''
+  theme:
+    description: "`light` or `dark`."
+    required: false
+    default: light
+  size:
+    description: "`small` (610x239), `medium` (814x318) or `large` (1221x477)."
+    required: false
+    default: medium
+  period:
+    description: "Days to summarise: 7, 14, 30, 90, 180 or 365."
+    required: false
+    default: '30'
+  filename:
+    description: Path of the SVG file to write, relative to the workspace.
+    required: false
+    default: repobeats.svg
+  max_pages:
+    description: Maximum API pages (100 items each) to read per list. Raise it for very active repositories.
+    required: false
+    default: '50'
+  output_action:
+    description: "`none` leaves the file in the workspace for later steps. `commit` commits and pushes it to the checked-out branch (needs `contents: write`)."
+    required: false
+    default: none
+  commit_message:
+    description: Commit message used when `output_action` is `commit`.
+    required: false
+    default: 'chore: update repobeats card'
+
+runs:
+  using: docker
+  image: docker://ghcr.io/spatelpatidar/repobeats:v0.2.0
