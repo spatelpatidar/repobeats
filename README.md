@@ -6,6 +6,31 @@ There is no sign-in, no GitHub App to install, no hosted service and no database
 
 The card shows pushes, opened and closed issues, opened and closed pull requests, the five most active contributors, and the change against the previous period of the same length.
 
+## Examples
+
+Generated weekly by [`showcase.yml`](.github/workflows/showcase.yml) with this Action (90-day period) and stored on the `output` branch. Light and dark variants switch with your GitHub theme.
+
+**spatelpatidar/repobeats**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/repobeats-dark.svg">
+  <img alt="Repobeats card for spatelpatidar/repobeats" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/repobeats-light.svg">
+</picture>
+
+**Platane/snk**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/snk-dark.svg">
+  <img alt="Repobeats card for Platane/snk" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/snk-light.svg">
+</picture>
+
+**lowlighter/metrics**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/metrics-dark.svg">
+  <img alt="Repobeats card for lowlighter/metrics" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/metrics-light.svg">
+</picture>
+
 ## Use it
 
 Add a step to a workflow. It has the same shape as `lowlighter/metrics`:
