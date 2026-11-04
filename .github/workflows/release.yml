@@ -1,33 +1,113 @@
 name: Release
+
+# The version in Cargo.toml decides what gets released when a PR is merged to main:
+#
+#   version = "0.3.0-beta.1"  ->  pre-release  v0.3.0-beta.1
+#                                 Docker tags: 0.3.0-beta.1, v0.3.0-beta.1, beta
+#   version = "0.3.0"         ->  stable       v0.3.0
+#                                 Docker tags: 0.3.0, v0.3.0, v0, latest
+#
+# If the tag for that version already exists, nothing is released, so a PR that
+# does not change the version never publishes anything. Docs-only changes do not
+# run this workflow at all. Add [skip release] to a commit message to skip.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+    paths:
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Dockerfile"
+      - "entrypoint.sh"
+      - "action.yml"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:   # re-run for the current version, for example after a failed run
 
-permissions:
-  contents: read
-  packages: write
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  image:
+  test:
+    if: ${{ !contains(github.event.head_commit.message, '[skip release]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --locked   # fails if Cargo.lock does not match the version in Cargo.toml
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # push the tag, create the release
+      packages: write   # push the image to ghcr.io
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # fetch existing tags
+
+      - name: Read version from Cargo.toml
+        id: v
+        run: |
+          version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "repobeats") | .version')"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Cargo.toml version '$version' must look like 0.3.0 or 0.3.0-beta.1"
+            exit 1
+          fi
+          tag="v$version"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "::notice::$tag already exists. Change the version in Cargo.toml to release again."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$version" == *-* ]]; then
+            pre="${version#*-}"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "channel=${pre%%.*}" >> "$GITHUB_OUTPUT"   # beta, rc, alpha, ...
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "channel=" >> "$GITHUB_OUTPUT"
+          fi
+          echo "release=true" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "major_tag=v${version%%.*}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "Releasing $tag"
+
+      - name: Set up Docker Buildx
+        if: steps.v.outputs.release == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        if: steps.v.outputs.release == 'true'
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - id: meta
+
+      # Stable also moves vX and latest. A pre-release moves only its channel tag
+      # (beta, rc, ...), so `latest` and vX always mean a stable release.
+      - name: Image tags
+        if: steps.v.outputs.release == 'true'
+        id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ${{ steps.v.outputs.image }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern=v{{version}}
-            type=semver,pattern=v{{major}}
-            type=raw,value=latest
-      - uses: docker/build-push-action@v6
+            type=raw,value=${{ steps.v.outputs.version }}
+            type=raw,value=${{ steps.v.outputs.tag }}
+            type=raw,value=${{ steps.v.outputs.major_tag }},enable=${{ steps.v.outputs.prerelease == 'false' }}
+            type=raw,value=latest,enable=${{ steps.v.outputs.prerelease == 'false' }}
+            type=raw,value=${{ steps.v.outputs.channel }},enable=${{ steps.v.outputs.prerelease == 'true' }}
+
+      # The image goes first: if the build fails, no tag or release is created.
+      - name: Build and push image
+        if: steps.v.outputs.release == 'true'
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
@@ -35,3 +115,47 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # action.yml pins the image tag, so the tagged commit must point at the new
+      # image. This commit only carries the tag: it is not pushed to any branch.
+      - name: Tag the release
+        if: steps.v.outputs.release == 'true'
+        env:
+          TAG: ${{ steps.v.outputs.tag }}
+          MAJOR_TAG: ${{ steps.v.outputs.major_tag }}
+          PRERELEASE: ${{ steps.v.outputs.prerelease }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --detach
+          sed -i -E "s#(image: docker://[^:]+):[A-Za-z0-9._-]+#\1:${TAG}#" action.yml
+          grep -n "image: docker://" action.yml
+          git add action.yml
+          git commit --allow-empty -m "chore(release): ${TAG} [skip ci]"
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "refs/tags/$TAG"
+          if [ "$PRERELEASE" = "false" ]; then
+            # Floating tag so `uses: owner/repo@v0` follows the newest stable release.
+            git tag -f "$MAJOR_TAG" "$TAG"
+            git push --force origin "refs/tags/$MAJOR_TAG"
+          fi
+
+      - name: Create GitHub Release
+        if: steps.v.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.v.outputs.tag }}
+          IMAGE: ${{ steps.v.outputs.image }}
+          PRERELEASE: ${{ steps.v.outputs.prerelease }}
+        run: |
+          if [ "$PRERELEASE" = "true" ]; then
+            flag="--prerelease"
+          else
+            flag="--latest"
+          fi
+          gh release create "$TAG" \
+            --verify-tag \
+            --title "$TAG" \
+            --generate-notes \
+            "$flag" \
+            --notes "Use it with \`uses: ${GITHUB_REPOSITORY}@${TAG}\`. Image: \`${IMAGE}:${TAG}\`."
