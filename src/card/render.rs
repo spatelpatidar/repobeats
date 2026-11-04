@@ -10,7 +10,11 @@ use svg::{
 use thiserror::Error;
 
 use super::{CardOptions, CardTheme, PeriodDays};
+
+mod extra;
+
 use crate::model::{ActivitySnapshot, ContributorActivity, DailyActivity};
+pub use extra::{render_contributors, render_languages, render_overview};
 
 pub trait CardRenderer {
     fn render(
@@ -98,7 +102,7 @@ pub fn render(
         palette,
     );
     render_push_chart(&mut body, period.current, palette);
-    render_contributors(&mut body, &snapshot.contributors, options.period, palette);
+    render_contributor_strip(&mut body, &snapshot.contributors, options.period, palette);
 
     let (width, height) = options.size.dimensions();
     Ok(Document::new()
@@ -106,9 +110,7 @@ pub fn render(
         .set("height", height)
         .set("viewBox", (0, 0, 814, 318))
         .set("fill", "none")
-        .add(Style::new(
-            r#".sans{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji"}.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;font-size:12px;letter-spacing:-.5px}.bold{font-weight:500}.small{font-size:14px}.smaller{font-size:12px}.glow{paint-order:stroke}"#,
-        ))
+        .add(Style::new(STYLE))
         .add(
             Rectangle::new()
                 .set("x", 0.5)
@@ -121,6 +123,8 @@ pub fn render(
         .to_string())
 }
 
+const STYLE: &str = r#".sans{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji"}.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;font-size:12px;letter-spacing:-.5px}.bold{font-weight:500}.small{font-size:14px}.smaller{font-size:12px}.glow{paint-order:stroke}"#;
+
 #[derive(Clone, Copy)]
 struct Palette {
     background: &'static str,
@@ -131,6 +135,8 @@ struct Palette {
     trend_up: &'static str,
     trend_down: &'static str,
     contributor: &'static str,
+    text: &'static str,
+    accent: &'static str,
 }
 
 impl Palette {
@@ -145,6 +151,8 @@ impl Palette {
                 trend_up: "#459631",
                 trend_down: "#CF3E3E",
                 contributor: "#487B41",
+                text: "#24292f",
+                accent: "#ec4899",
             },
             CardTheme::Dark => Self {
                 background: "#0d1117",
@@ -155,6 +163,68 @@ impl Palette {
                 trend_up: "#56d364",
                 trend_down: "#f85149",
                 contributor: "#7ee787",
+                text: "#e6edf3",
+                accent: "#ec4899",
+            },
+            CardTheme::GithubDimmed => Self {
+                background: "#22272e",
+                panel_fill: "#2d333b",
+                panel_stroke: "#444c56",
+                panel_highlight: "rgba(255,255,255,0.06)",
+                secondary_text: "#768390",
+                trend_up: "#57ab5a",
+                trend_down: "#e5534b",
+                contributor: "#6bc46d",
+                text: "#adbac7",
+                accent: "#e275ad",
+            },
+            CardTheme::Dracula => Self {
+                background: "#282a36",
+                panel_fill: "#21222c",
+                panel_stroke: "#44475a",
+                panel_highlight: "rgba(255,255,255,0.05)",
+                secondary_text: "#6272a4",
+                trend_up: "#50fa7b",
+                trend_down: "#ff5555",
+                contributor: "#50fa7b",
+                text: "#f8f8f2",
+                accent: "#ff79c6",
+            },
+            CardTheme::Nord => Self {
+                background: "#2e3440",
+                panel_fill: "#3b4252",
+                panel_stroke: "#4c566a",
+                panel_highlight: "rgba(255,255,255,0.05)",
+                secondary_text: "#9aa5b8",
+                trend_up: "#a3be8c",
+                trend_down: "#bf616a",
+                contributor: "#a3be8c",
+                text: "#eceff4",
+                accent: "#88c0d0",
+            },
+            CardTheme::TokyoNight => Self {
+                background: "#1a1b26",
+                panel_fill: "#24283b",
+                panel_stroke: "#414868",
+                panel_highlight: "rgba(255,255,255,0.05)",
+                secondary_text: "#7982a9",
+                trend_up: "#9ece6a",
+                trend_down: "#f7768e",
+                contributor: "#9ece6a",
+                text: "#c0caf5",
+                accent: "#bb9af7",
+            },
+            CardTheme::SolarizedLight => Self {
+                background: "#fdf6e3",
+                panel_fill: "#eee8d5",
+                panel_stroke: "#d6cfb9",
+                panel_highlight: "rgba(255,255,255,0.4)",
+                secondary_text: "#657b83",
+                trend_up: "#859900",
+                trend_down: "#dc322f",
+                contributor: "#859900",
+                text: "#586e75",
+                accent: "#d33682",
             },
         }
     }
@@ -162,12 +232,16 @@ impl Palette {
 
 fn render_header(svg: &mut String, days: &[DailyActivity], period: PeriodDays, palette: Palette) {
     panel(svg, 0, 0, 813, 47, palette);
-    svg.push_str(
-        r##"<g transform="translate(10 16)" fill="#ec4899"><rect width="20" height="2" rx="1"/><rect y="14" width="20" height="2" rx="1"/><rect y="4" width="6" height="2" rx="1"/><rect x="7" y="4" width="6" height="2" rx="1"/><rect x="14" y="4" width="6" height="2" rx="1"/><rect y="8" width="6" height="4" rx="1"/><rect x="7" y="8" width="6" height="4" rx="1"/><rect x="14" y="8" width="6" height="4" rx="1"/></g>"##,
-    );
     write!(
         svg,
-        r##"<text x="38" y="29" class="sans small bold glow" fill="#ec4899" stroke-width="0.5">{} Contributions in the Last {} Days</text>"##,
+        r##"<g transform="translate(10 16)" fill="{}"><rect width="20" height="2" rx="1"/><rect y="14" width="20" height="2" rx="1"/><rect y="4" width="6" height="2" rx="1"/><rect x="7" y="4" width="6" height="2" rx="1"/><rect x="14" y="4" width="6" height="2" rx="1"/><rect y="8" width="6" height="4" rx="1"/><rect x="7" y="8" width="6" height="4" rx="1"/><rect x="14" y="8" width="6" height="4" rx="1"/></g>"##,
+        palette.accent,
+    )
+    .unwrap();
+    write!(
+        svg,
+        r##"<text x="38" y="29" class="sans small bold glow" fill="{}" stroke-width="0.5">{} Contributions in the Last {} Days</text>"##,
+        palette.accent,
         days.iter().map(DailyActivity::contributions).sum::<u32>(),
         period.get(),
     )
@@ -182,11 +256,12 @@ fn render_header(svg: &mut String, days: &[DailyActivity], period: PeriodDays, p
     for (index, value) in activity.iter().enumerate() {
         write!(
             svg,
-            r##"<rect data-header-day="{}" x="{:.1}" y="20" width="{:.1}" height="8" rx="1.5" opacity="{:.1}" fill="#ec4899"/>"##,
+            r##"<rect data-header-day="{}" x="{:.1}" y="20" width="{:.1}" height="8" rx="1.5" opacity="{:.1}" fill="{}"/>"##,
             index + 1,
             533.5 + index as f64 * slot,
             width,
-            opacity(*value, max)
+            opacity(*value, max),
+            palette.accent
         )
         .unwrap();
     }
@@ -398,7 +473,7 @@ fn chart_bar(
     svg.push_str(&rectangle.to_string());
 }
 
-fn render_contributors(
+fn render_contributor_strip(
     svg: &mut String,
     contributors: &[ContributorActivity],
     period: PeriodDays,

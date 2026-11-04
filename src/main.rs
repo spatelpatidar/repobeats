@@ -2,7 +2,10 @@ use std::{env, fs, path::PathBuf, process::ExitCode};
 
 use anyhow::{Context, Result, bail};
 use repobeats::{
-    card::{CardOptions, CardRenderer, CardSize, CardTheme, PeriodDays, SvgCardRenderer},
+    card::{
+        CardKind, CardOptions, CardRenderer, CardSize, CardTheme, PeriodDays, SvgCardRenderer,
+        render_contributors, render_languages, render_overview,
+    },
     collector::Collector,
     domain::RepositoryName,
 };
@@ -10,7 +13,9 @@ use repobeats::{
 const USAGE: &str = "\
 repobeats: write a GitHub repository activity card to an SVG file.
 
-Usage: repobeats [--repo OWNER/NAME] [--user OWNER] [--theme light|dark]
+Usage: repobeats [--repo OWNER/NAME] [--user OWNER]
+                 [--card activity|languages|contributors|overview]
+                 [--theme light|dark|github-dimmed|dracula|nord|tokyo-night|solarized-light]
                  [--size small|medium|large] [--period 7|14|30|90|180|365]
                  [--filename FILE.svg] [--max-pages N]
 
@@ -22,6 +27,7 @@ Every option can also be set with a REPOBEATS_<NAME> environment variable.";
 struct Args {
     repo: Option<String>,
     user: Option<String>,
+    card: Option<String>,
     theme: Option<String>,
     size: Option<String>,
     period: Option<String>,
@@ -41,6 +47,7 @@ impl Args {
             let slot = match flag.as_str() {
                 "--repo" => &mut args.repo,
                 "--user" => &mut args.user,
+                "--card" => &mut args.card,
                 "--theme" => &mut args.theme,
                 "--size" => &mut args.size,
                 "--period" => &mut args.period,
@@ -97,7 +104,14 @@ async fn run() -> Result<()> {
     let mut args = Args::parse()?;
     let repository = repository(&mut args)?;
     let options = CardOptions {
-        theme: enum_value::<CardTheme>(pick(args.theme.take(), "THEME"), "theme (light or dark)")?,
+        kind: enum_value::<CardKind>(
+            pick(args.card.take(), "CARD"),
+            "card (activity, languages, contributors or overview)",
+        )?,
+        theme: enum_value::<CardTheme>(
+            pick(args.theme.take(), "THEME"),
+            "theme (light, dark, github-dimmed, dracula, nord, tokyo-night or solarized-light)",
+        )?,
         size: enum_value::<CardSize>(
             pick(args.size.take(), "SIZE"),
             "size (small, medium or large)",
@@ -127,11 +141,29 @@ async fn run() -> Result<()> {
 
     let api_url = env::var("GITHUB_API_URL").ok();
 
-    eprintln!("repobeats: collecting {repository}");
-    let snapshot = Collector::new(token.as_deref(), api_url.as_deref(), max_pages)?
-        .collect(&repository)
-        .await?;
-    let svg = SvgCardRenderer.render(&snapshot, options)?;
+    eprintln!(
+        "repobeats: collecting {repository} ({:?} card)",
+        options.kind
+    );
+    let collector = Collector::new(token.as_deref(), api_url.as_deref(), max_pages)?;
+    let svg = match options.kind {
+        CardKind::Activity => {
+            let snapshot = collector.collect(&repository).await?;
+            SvgCardRenderer.render(&snapshot, options)?
+        }
+        CardKind::Contributors => {
+            let snapshot = collector.collect(&repository).await?;
+            render_contributors(&snapshot, options)?
+        }
+        CardKind::Languages => {
+            let languages = collector.languages(&repository).await?;
+            render_languages(&repository, &languages, options)
+        }
+        CardKind::Overview => {
+            let overview = collector.overview(&repository).await?;
+            render_overview(&overview, options)
+        }
+    };
 
     if let Some(parent) = filename
         .parent()

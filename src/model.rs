@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::domain::RepositoryName;
 
@@ -186,5 +187,79 @@ fn add_closed(day: &mut DailyActivity, kind: EventKind) {
         EventKind::Commit => {}
         EventKind::Issue => day.issues_closed += 1,
         EventKind::PullRequest => day.pulls_closed += 1,
+    }
+}
+
+/// Bytes of code per language, largest first.
+pub type LanguageBreakdown = Vec<(String, u64)>;
+
+/// Parses the body of `GET /repos/{owner}/{repo}/languages`.
+pub fn parse_languages(body: &Value) -> LanguageBreakdown {
+    let mut languages = body
+        .as_object()
+        .map(|map| {
+            map.iter()
+                .filter_map(|(name, bytes)| Some((name.clone(), bytes.as_u64()?)))
+                .filter(|(_, bytes)| *bytes > 0)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    languages.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
+    languages
+}
+
+/// Headline facts about a repository.
+#[derive(Clone, Debug)]
+pub struct RepoOverview {
+    pub repository: RepositoryName,
+    pub generated_at: DateTime<Utc>,
+    pub description: Option<String>,
+    pub stars: u64,
+    pub forks: u64,
+    pub open_issues: u64,
+    pub watchers: u64,
+    pub license: Option<String>,
+    pub language: Option<String>,
+    pub pushed_at: Option<DateTime<Utc>>,
+    pub latest_release: Option<String>,
+}
+
+impl RepoOverview {
+    /// Builds an overview from the body of `GET /repos/{owner}/{repo}`.
+    pub fn from_json(
+        repository: RepositoryName,
+        generated_at: DateTime<Utc>,
+        repo: &Value,
+        latest_release: Option<String>,
+    ) -> Self {
+        let text = |value: &Value| {
+            value
+                .as_str()
+                .map(str::trim)
+                .filter(|text| !text.is_empty())
+                .map(str::to_owned)
+        };
+        let count = |key: &str| repo[key].as_u64().unwrap_or(0);
+        let license = match repo["license"]["spdx_id"].as_str() {
+            Some(id) if id != "NOASSERTION" && !id.is_empty() => Some(id.to_owned()),
+            _ => text(&repo["license"]["name"]),
+        };
+        Self {
+            repository,
+            generated_at,
+            description: text(&repo["description"]),
+            stars: count("stargazers_count"),
+            forks: count("forks_count"),
+            open_issues: count("open_issues_count"),
+            watchers: repo["subscribers_count"]
+                .as_u64()
+                .unwrap_or_else(|| count("watchers_count")),
+            license,
+            language: text(&repo["language"]),
+            pushed_at: repo["pushed_at"]
+                .as_str()
+                .and_then(|value| value.parse().ok()),
+            latest_release,
+        }
     }
 }

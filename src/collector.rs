@@ -14,9 +14,14 @@ use octocrab::{
 };
 use serde::de::DeserializeOwned;
 
+use serde_json::Value;
+
 use crate::{
     domain::RepositoryName,
-    model::{ActivitySnapshot, COLLECTION_DAYS, EventKind, RepositoryEvent},
+    model::{
+        ActivitySnapshot, COLLECTION_DAYS, EventKind, LanguageBreakdown, RepoOverview,
+        RepositoryEvent, parse_languages,
+    },
 };
 
 pub struct Collector {
@@ -105,6 +110,52 @@ impl Collector {
             now,
             &events,
         ))
+    }
+
+    /// One request: bytes of code per language.
+    pub async fn languages(&self, repository: &RepositoryName) -> Result<LanguageBreakdown> {
+        let route = format!("/repos/{repository}/languages");
+        let body = self.get_json(&route, "languages").await?;
+        Ok(parse_languages(&body))
+    }
+
+    /// Two requests: repository details and the latest release (none is fine).
+    pub async fn overview(&self, repository: &RepositoryName) -> Result<RepoOverview> {
+        let now = Utc::now();
+        let repo = self
+            .get_json(&format!("/repos/{repository}"), "repository")
+            .await?;
+        let release = match self
+            .client
+            .get::<Value, _, ()>(format!("/repos/{repository}/releases/latest"), None::<&()>)
+            .await
+        {
+            Ok(body) => body["tag_name"]
+                .as_str()
+                .or_else(|| body["name"].as_str())
+                .map(str::to_owned),
+            Err(error) if status(&error) == Some(404) => None,
+            Err(error) => {
+                let hint = request_hint("latest release", &error);
+                return Err(anyhow::Error::new(error).context(hint));
+            }
+        };
+        Ok(RepoOverview::from_json(
+            repository.clone(),
+            now,
+            &repo,
+            release,
+        ))
+    }
+
+    async fn get_json(&self, route: &str, what: &str) -> Result<Value> {
+        self.client
+            .get::<Value, _, ()>(route, None::<&()>)
+            .await
+            .map_err(|error| {
+                let hint = request_hint(what, &error);
+                anyhow::Error::new(error).context(hint)
+            })
     }
 
     async fn commits(
