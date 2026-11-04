@@ -1,0 +1,61 @@
+# Copy to .github/workflows/repobeats.yml in the repository that should show the card.
+name: Repobeats
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write   # only needed for output_action: commit
+
+jobs:
+  card:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same shape as lowlighter/metrics: token + user + repo + filename.
+      - name: Repobeats - respondo-grpc
+        uses: spatelpatidar/repobeats@v0.3.0
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          token: ${{ secrets.METRICS_TOKEN }}   # or ${{ secrets.GITHUB_TOKEN }} for this repo
+          user: spatelpatidar
+          repo: respondo-grpc
+          filename: repobeats.respondo-grpc.svg
+          output_action: none
+
+      # Several cards in one job: just repeat the step.
+      - name: Repobeats - dark, 90 days
+        uses: spatelpatidar/repobeats@v0.3.0
+        continue-on-error: true
+        with:
+          token: ${{ secrets.METRICS_TOKEN }}
+          user: spatelpatidar
+          repo: respondo-grpc
+          theme: dark
+          period: 90
+          filename: repobeats.respondo-grpc.dark.svg
+          output_action: none
+
+      # Other card types: languages, contributors, overview.
+      - name: Repobeats - languages
+        uses: spatelpatidar/repobeats@v0.3.0
+        continue-on-error: true
+        with:
+          token: ${{ secrets.METRICS_TOKEN }}
+          user: spatelpatidar
+          repo: respondo-grpc
+          card: languages
+          theme: tokyo-night
+          filename: repobeats.respondo-grpc.languages.svg
+          output_action: none
+
+      # Publish the files yourself (or set output_action: commit on the last step).
+      - name: Commit cards
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add repobeats.*.svg
+          git diff --cached --quiet || (git commit -m "chore: update repobeats cards" && git push)
