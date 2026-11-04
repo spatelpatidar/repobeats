@@ -36,6 +36,7 @@ fn supports_dark_small_seven_day_cards() {
         theme: CardTheme::Dark,
         size: CardSize::Small,
         period: PeriodDays::SEVEN,
+        ..CardOptions::default()
     };
     let svg = SvgCardRenderer.render(&snapshot(), options).unwrap();
 
