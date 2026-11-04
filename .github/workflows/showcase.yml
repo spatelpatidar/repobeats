@@ -21,76 +21,156 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Card - spatelpatidar/repobeats (light)
-        uses: ./
-        continue-on-error: true
-        timeout-minutes: 10
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          repo: spatelpatidar/repobeats
-          theme: light
-          period: 90
-          filename: showcase/repobeats-light.svg
-          output_action: none
-
-      - name: Card - spatelpatidar/repobeats (dark)
-        uses: ./
-        continue-on-error: true
-        timeout-minutes: 10
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          repo: spatelpatidar/repobeats
-          theme: dark
-          period: 90
-          filename: showcase/repobeats-dark.svg
-          output_action: none
-
-      - name: Card - Platane/snk (light)
+      - name: Activity (light)
         uses: ./
         continue-on-error: true
         timeout-minutes: 10
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           repo: Platane/snk
+          card: activity
           theme: light
           period: 90
-          filename: showcase/snk-light.svg
+          filename: showcase/activity-light.svg
           output_action: none
 
-      - name: Card - Platane/snk (dark)
+      - name: Activity (dark)
         uses: ./
         continue-on-error: true
         timeout-minutes: 10
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           repo: Platane/snk
+          card: activity
           theme: dark
           period: 90
-          filename: showcase/snk-dark.svg
+          filename: showcase/activity-dark.svg
           output_action: none
 
-      - name: Card - lowlighter/metrics (light)
+      - name: Activity (github-dimmed)
+        uses: ./
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repo: Platane/snk
+          card: activity
+          theme: github-dimmed
+          period: 90
+          filename: showcase/activity-github-dimmed.svg
+          output_action: none
+
+      - name: Activity (dracula)
+        uses: ./
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repo: Platane/snk
+          card: activity
+          theme: dracula
+          period: 90
+          filename: showcase/activity-dracula.svg
+          output_action: none
+
+      - name: Activity (nord)
+        uses: ./
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repo: Platane/snk
+          card: activity
+          theme: nord
+          period: 90
+          filename: showcase/activity-nord.svg
+          output_action: none
+
+      - name: Activity (tokyo-night)
+        uses: ./
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repo: Platane/snk
+          card: activity
+          theme: tokyo-night
+          period: 90
+          filename: showcase/activity-tokyo-night.svg
+          output_action: none
+
+      - name: Activity (solarized-light)
+        uses: ./
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repo: Platane/snk
+          card: activity
+          theme: solarized-light
+          period: 90
+          filename: showcase/activity-solarized-light.svg
+          output_action: none
+
+      - name: Contributors
+        uses: ./
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repo: Platane/snk
+          card: contributors
+          theme: dark
+          period: 90
+          filename: showcase/contributors-dark.svg
+          output_action: none
+
+      - name: Languages (light)
         uses: ./
         continue-on-error: true
         timeout-minutes: 10
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           repo: lowlighter/metrics
+          card: languages
           theme: light
-          period: 90
-          filename: showcase/metrics-light.svg
+          filename: showcase/languages-light.svg
           output_action: none
 
-      - name: Card - lowlighter/metrics (dark)
+      - name: Languages (dracula)
         uses: ./
         continue-on-error: true
         timeout-minutes: 10
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           repo: lowlighter/metrics
-          theme: dark
-          period: 90
-          filename: showcase/metrics-dark.svg
+          card: languages
+          theme: dracula
+          filename: showcase/languages-dracula.svg
+          output_action: none
+
+      - name: Overview (light)
+        uses: ./
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repo: Platane/snk
+          card: overview
+          theme: light
+          filename: showcase/overview-light.svg
+          output_action: none
+
+      - name: Overview (nord)
+        uses: ./
+        continue-on-error: true
+        timeout-minutes: 10
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repo: lowlighter/metrics
+          card: overview
+          theme: nord
+          filename: showcase/overview-nord.svg
           output_action: none
 
       - name: Publish cards to output branch

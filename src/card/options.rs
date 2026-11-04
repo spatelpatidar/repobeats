@@ -2,11 +2,43 @@ use serde::{Deserialize, Deserializer, de::Error as _};
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 pub enum CardTheme {
     #[default]
     Light,
     Dark,
+    GithubDimmed,
+    Dracula,
+    Nord,
+    TokyoNight,
+    SolarizedLight,
+}
+
+impl CardTheme {
+    pub const ALL: [Self; 7] = [
+        Self::Light,
+        Self::Dark,
+        Self::GithubDimmed,
+        Self::Dracula,
+        Self::Nord,
+        Self::TokyoNight,
+        Self::SolarizedLight,
+    ];
+}
+
+/// Which card to draw.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum CardKind {
+    /// Issues, pull requests, pushes and top contributors (the original card).
+    #[default]
+    Activity,
+    /// Language breakdown by bytes of code.
+    Languages,
+    /// Ranked contributors with a bar per person.
+    Contributors,
+    /// Stars, forks, issues, license, last push and latest release.
+    Overview,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq)]
@@ -93,6 +125,8 @@ pub struct PeriodDaysError(u16);
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq)]
 pub struct CardOptions {
+    #[serde(default)]
+    pub kind: CardKind,
     #[serde(default)]
     pub theme: CardTheme,
     #[serde(default)]
