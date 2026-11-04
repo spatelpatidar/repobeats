@@ -18,16 +18,20 @@ inputs:
     description: Repository as `owner/name`, or a bare name together with `user`. Defaults to the current repository.
     required: false
     default: ''
+  card:
+    description: "Which card to draw: `activity` (issues, pull requests, pushes, top contributors), `languages` (language breakdown), `contributors` (ranked contributors with bars) or `overview` (stars, forks, issues, license, last push, latest release)."
+    required: false
+    default: activity
   theme:
-    description: "`light` or `dark`."
+    description: "`light`, `dark`, `github-dimmed`, `dracula`, `nord`, `tokyo-night` or `solarized-light`."
     required: false
     default: light
   size:
-    description: "`small` (610x239), `medium` (814x318) or `large` (1221x477)."
+    description: "Width of the card: `small` (610px), `medium` (814px) or `large` (1221px). Height follows the card."
     required: false
     default: medium
   period:
-    description: "Days to summarise: 7, 14, 30, 90, 180 or 365."
+    description: "Days to summarise: 7, 14, 30, 90, 180 or 365. Used by the `activity` and `contributors` cards."
     required: false
     default: '30'
   filename:
@@ -49,4 +53,4 @@ inputs:
 
 runs:
   using: docker
-  image: docker://ghcr.io/spatelpatidar/repobeats:v0.2.0
+  image: docker://ghcr.io/spatelpatidar/repobeats:v0.3.0
