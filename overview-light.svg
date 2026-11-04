@@ -1,0 +1,43 @@
+<svg fill="none" height="218" viewBox="0 0 814 218" width="814" xmlns="http://www.w3.org/2000/svg">
+<style>
+.sans{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji"}.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;font-size:12px;letter-spacing:-.5px}.bold{font-weight:500}.small{font-size:14px}.smaller{font-size:12px}.glow{paint-order:stroke}
+</style>
+<rect fill="transparent" height="217" width="813" x="0.5" y="0.5"/>
+<rect fill="none" height="66" rx="4.5" stroke="rgba(0,0,0,0.15)" width="813" x="0.5" y="0.5"/><rect fill="none" height="66" rx="4.5" stroke="rgba(255,255,255,0.3)" width="813" x="0.5" y="0.5"/><text class="sans small bold" fill="#ec4899" x="12" y="29">
+Platane/snk
+</text><text class="sans smaller" fill="#777" x="12" y="52">
+🟩⬜ Generates a snake game from a github user contributions graph and output a screen capture as animated svg…
+</text><rect fill="none" height="70" rx="4.5" stroke="rgba(0,0,0,0.15)" width="195" x="0.5" y="76.5"/><rect fill="none" height="70" rx="4.5" stroke="rgba(255,255,255,0.3)" width="195" x="0.5" y="76.5"/><rect x="8" y="86" width="3" height="50" rx="1.5" fill="#e3b341"/><text class="sans smaller" fill="#777" x="20" y="100">
+Stars
+</text><text class="sans bold" fill="#24292f" font-size="26" x="20" y="133">
+6.2k
+</text><rect fill="none" height="70" rx="4.5" stroke="rgba(0,0,0,0.15)" width="195" x="206.5" y="76.5"/><rect fill="none" height="70" rx="4.5" stroke="rgba(255,255,255,0.3)" width="195" x="206.5" y="76.5"/><rect x="214" y="86" width="3" height="50" rx="1.5" fill="#406CC4"/><text class="sans smaller" fill="#777" x="226" y="100">
+Forks
+</text><text class="sans bold" fill="#24292f" font-size="26" x="226" y="133">
+2.3k
+</text><rect fill="none" height="70" rx="4.5" stroke="rgba(0,0,0,0.15)" width="195" x="412.5" y="76.5"/><rect fill="none" height="70" rx="4.5" stroke="rgba(255,255,255,0.3)" width="195" x="412.5" y="76.5"/><rect x="420" y="86" width="3" height="50" rx="1.5" fill="#BA473E"/><text class="sans smaller" fill="#777" x="432" y="100">
+Open issues
+</text><text class="sans bold" fill="#24292f" font-size="26" x="432" y="133">
+2
+</text><rect fill="none" height="70" rx="4.5" stroke="rgba(0,0,0,0.15)" width="195" x="618.5" y="76.5"/><rect fill="none" height="70" rx="4.5" stroke="rgba(255,255,255,0.3)" width="195" x="618.5" y="76.5"/><rect x="626" y="86" width="3" height="50" rx="1.5" fill="#7B58C9"/><text class="sans smaller" fill="#777" x="638" y="100">
+Watchers
+</text><text class="sans bold" fill="#24292f" font-size="26" x="638" y="133">
+17
+</text><rect fill="none" height="60" rx="4.5" stroke="rgba(0,0,0,0.15)" width="195" x="0.5" y="156.5"/><rect fill="none" height="60" rx="4.5" stroke="rgba(255,255,255,0.3)" width="195" x="0.5" y="156.5"/><rect x="8" y="166" width="3" height="40" rx="1.5" fill="#459631"/><text class="sans smaller" fill="#777" x="20" y="180">
+License
+</text><text class="sans bold" fill="#24292f" font-size="16" x="20" y="203">
+None
+</text><rect fill="none" height="60" rx="4.5" stroke="rgba(0,0,0,0.15)" width="195" x="206.5" y="156.5"/><rect fill="none" height="60" rx="4.5" stroke="rgba(255,255,255,0.3)" width="195" x="206.5" y="156.5"/><rect x="214" y="166" width="3" height="40" rx="1.5" fill="#00ADD8"/><text class="sans smaller" fill="#777" x="226" y="180">
+Main language
+</text><text class="sans bold" fill="#24292f" font-size="16" x="226" y="203">
+TypeScript
+</text><rect fill="none" height="60" rx="4.5" stroke="rgba(0,0,0,0.15)" width="195" x="412.5" y="156.5"/><rect fill="none" height="60" rx="4.5" stroke="rgba(255,255,255,0.3)" width="195" x="412.5" y="156.5"/><rect x="420" y="166" width="3" height="40" rx="1.5" fill="#ec4899"/><text class="sans smaller" fill="#777" x="432" y="180">
+Last push
+</text><text class="sans bold" fill="#24292f" font-size="16" x="432" y="203">
+16 days ago
+</text><rect fill="none" height="60" rx="4.5" stroke="rgba(0,0,0,0.15)" width="195" x="618.5" y="156.5"/><rect fill="none" height="60" rx="4.5" stroke="rgba(255,255,255,0.3)" width="195" x="618.5" y="156.5"/><rect x="626" y="166" width="3" height="40" rx="1.5" fill="#ff7a35"/><text class="sans smaller" fill="#777" x="638" y="180">
+Latest release
+</text><text class="sans bold" fill="#24292f" font-size="16" x="638" y="203">
+v3.5.0
+</text>
+</svg>
