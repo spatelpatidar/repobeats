@@ -52,6 +52,20 @@ jobs:
           filename: repobeats.respondo-grpc.languages.svg
           output_action: none
 
+      # Custom colors: [0] background, [1] primary, [2] secondary, [3] text, [4] tertiary (optional).
+      # Leave out the # or quote the whole value, because YAML treats # as a comment.
+      - name: Repobeats - custom colors
+        uses: spatelpatidar/repobeats@v0.3.0
+        continue-on-error: true
+        with:
+          token: ${{ secrets.METRICS_TOKEN }}
+          user: spatelpatidar
+          repo: respondo-grpc
+          colors: "0b1020,ff4d8d,4dd2ff,eef1ff,ffd166"
+          animate: true   # set to false for a static card
+          filename: repobeats.respondo-grpc.custom.svg
+          output_action: none
+
       # Publish the files yourself (or set output_action: commit on the last step).
       - name: Commit cards
         run: |
