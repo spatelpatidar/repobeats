@@ -1,6 +1,8 @@
 use serde::{Deserialize, Deserializer, de::Error as _};
 use thiserror::Error;
 
+use super::colors::ColorScheme;
+
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum CardTheme {
@@ -123,7 +125,7 @@ impl<'de> Deserialize<'de> for PeriodDays {
 #[error("period must be 7, 14, 30, 90, 180, or 365 days, got {0}")]
 pub struct PeriodDaysError(u16);
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
 pub struct CardOptions {
     #[serde(default)]
     pub kind: CardKind,
@@ -133,4 +135,29 @@ pub struct CardOptions {
     pub size: CardSize,
     #[serde(default)]
     pub period: PeriodDays,
+    /// Custom colors. When set, they replace the colors of `theme`.
+    /// Position decides the role, see [`ColorScheme`].
+    #[serde(default)]
+    pub colors: Option<ColorScheme>,
+    /// Play the entrance and looping animations. Viewers with
+    /// `prefers-reduced-motion` see the finished card either way.
+    #[serde(default = "animate_default")]
+    pub animate: bool,
+}
+
+fn animate_default() -> bool {
+    true
+}
+
+impl Default for CardOptions {
+    fn default() -> Self {
+        Self {
+            kind: CardKind::default(),
+            theme: CardTheme::default(),
+            size: CardSize::default(),
+            period: PeriodDays::default(),
+            colors: None,
+            animate: true,
+        }
+    }
 }
