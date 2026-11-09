@@ -1,0 +1,36 @@
+<svg fill="none" height="125" viewBox="0 0 814 125" width="814" xmlns="http://www.w3.org/2000/svg">
+<!-- repobeats theme: Dracula -->
+<style>
+.sans{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji"}.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;font-size:12px;letter-spacing:-.5px}.bold{font-weight:500}.small{font-size:14px}.smaller{font-size:12px}.glow{paint-order:stroke}.in{animation:rise .5s ease-out both}@keyframes rise{from{opacity:0;transform:translateY(8px)}}.cell{animation:fade .4s ease-out both}@keyframes fade{from{opacity:0}}.bar{transform-box:fill-box;transform-origin:50% 100%;animation:grow .6s cubic-bezier(.2,.8,.2,1) both}@keyframes grow{from{transform:scaleY(0)}}.hbar,.wipe{transform-box:fill-box;transform-origin:0 50%;animation:growx .7s cubic-bezier(.2,.8,.2,1) both}@keyframes growx{from{transform:scaleX(0)}}.ping{opacity:0;transform-box:fill-box;transform-origin:center;animation:ping 2.8s ease-out 1s infinite}@keyframes ping{0%{opacity:.7;transform:scale(1)}70%,100%{opacity:0;transform:scale(2.2)}}.bob-up{animation:bob-up 2.4s ease-in-out 1.2s infinite}.bob-down{animation:bob-down 2.4s ease-in-out 1.2s infinite}@keyframes bob-up{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}@keyframes bob-down{0%,100%{transform:translateY(0)}50%{transform:translateY(2px)}}.d0{animation-delay:0ms}.w0{animation-delay:350ms}.d1{animation-delay:70ms}.w1{animation-delay:390ms}.d2{animation-delay:140ms}.w2{animation-delay:430ms}.d3{animation-delay:210ms}.w3{animation-delay:470ms}.d4{animation-delay:280ms}.w4{animation-delay:510ms}.d5{animation-delay:350ms}.w5{animation-delay:550ms}.d6{animation-delay:420ms}.w6{animation-delay:590ms}.d7{animation-delay:490ms}.w7{animation-delay:630ms}.d8{animation-delay:560ms}.w8{animation-delay:670ms}.d9{animation-delay:630ms}.w9{animation-delay:710ms}.d10{animation-delay:700ms}.w10{animation-delay:750ms}.d11{animation-delay:770ms}.w11{animation-delay:790ms}.d12{animation-delay:840ms}.w12{animation-delay:830ms}.d13{animation-delay:910ms}.w13{animation-delay:870ms}.d14{animation-delay:980ms}.w14{animation-delay:910ms}.d15{animation-delay:1050ms}.w15{animation-delay:950ms}@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+<rect fill="#282a36" height="124" width="813" x="0.5" y="0.5"/>
+<g class="in d0"><rect fill="#21222c" height="124" rx="4.5" stroke="#44475a" width="813" x="0.5" y="0.5"/><rect fill="none" height="124" rx="4.5" stroke="rgba(255,255,255,0.05)" width="813" x="0.5" y="0.5"/><text class="sans small bold" fill="#ff79c6" x="12" y="29">
+Languages
+</text><text class="mono smaller" fill="#6272a4" text-anchor="end" x="801" y="29">
+lowlighter/metrics
+</text></g><clipPath id="lang-clip"><rect x="12" y="44" width="789" height="10" rx="5"/></clipPath><g clip-path="url(#lang-clip)"><g class="wipe w0"><rect x="12.00" y="44" width="578.35" height="10" fill="#f1e05a"/><rect x="590.35" y="44" width="146.78" height="10" fill="#3178c6"/><rect x="737.13" y="44" width="48.76" height="10" fill="#e34c26"/><rect x="785.89" y="44" width="12.57" height="10" fill="#563d7c"/><rect x="798.46" y="44" width="1.66" height="10" fill="#89e051"/><rect x="800.12" y="44" width="0.88" height="10" fill="#384d54"/></g></g><g class="in d2"><circle cx="17" cy="78" r="5" fill="#f1e05a"/><text class="sans smaller" fill="#f8f8f2" x="28" y="82">
+JavaScript
+</text><text class="mono smaller" fill="#6272a4" text-anchor="end" x="190" y="82">
+73.3%
+</text></g><g class="in d3"><circle cx="216" cy="78" r="5" fill="#3178c6"/><text class="sans smaller" fill="#f8f8f2" x="227" y="82">
+TypeScript
+</text><text class="mono smaller" fill="#6272a4" text-anchor="end" x="389" y="82">
+18.6%
+</text></g><g class="in d4"><circle cx="415" cy="78" r="5" fill="#e34c26"/><text class="sans smaller" fill="#f8f8f2" x="426" y="82">
+HTML
+</text><text class="mono smaller" fill="#6272a4" text-anchor="end" x="588" y="82">
+6.2%
+</text></g><g class="in d5"><circle cx="614" cy="78" r="5" fill="#563d7c"/><text class="sans smaller" fill="#f8f8f2" x="625" y="82">
+CSS
+</text><text class="mono smaller" fill="#6272a4" text-anchor="end" x="787" y="82">
+1.6%
+</text></g><g class="in d6"><circle cx="17" cy="102" r="5" fill="#89e051"/><text class="sans smaller" fill="#f8f8f2" x="28" y="106">
+Shell
+</text><text class="mono smaller" fill="#6272a4" text-anchor="end" x="190" y="106">
+0.2%
+</text></g><g class="in d7"><circle cx="216" cy="102" r="5" fill="#384d54"/><text class="sans smaller" fill="#f8f8f2" x="227" y="106">
+Dockerfile
+</text><text class="mono smaller" fill="#6272a4" text-anchor="end" x="389" y="106">
+0.1%
+</text></g>
+</svg>
