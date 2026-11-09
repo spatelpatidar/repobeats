@@ -83,12 +83,57 @@ Then embed the file:
 | `repo` | current repository | `owner/name`, or a bare name together with `user`. |
 | `card` | `activity` | `activity`, `languages`, `contributors` or `overview`. |
 | `theme` | `light` | `light`, `dark`, `github-dimmed`, `dracula`, `nord`, `tokyo-night`, `solarized-light`. |
+| `colors` | empty | 4 or 5 hex codes. Replaces `theme`. See [Custom colors](#custom-colors). |
+| `animate` | `true` | `false` writes a static card. See [Animation](#animation). |
 | `size` | `medium` | Width: `small` (610px), `medium` (814px), `large` (1221px). Height follows the card. |
 | `period` | `30` | `7`, `14`, `30`, `90`, `180` or `365` days. Used by `activity` and `contributors`. |
 | `filename` | `repobeats.svg` | Path relative to the workspace. Parent folders are created. |
 | `max_pages` | `50` | API pages (100 items each) read per list. Raise it for very busy repositories. |
 | `output_action` | `none` | `none` or `commit`. |
 | `commit_message` | `chore: update repobeats card` | Used with `commit`. |
+
+## Custom colors
+
+`colors` takes 4 or 5 hex codes. The position in the list decides what each color is used for, and the list replaces `theme`.
+
+| Index | Role | Used for |
+| --- | --- | --- |
+| `[0]` | background | Card background. `transparent` is allowed here only. Panel fill, borders and highlights are mixed from it. |
+| `[1]` | primary | Titles, header icon and day strip, the Issues series, top contributor names, bars and heat cells, first overview tiles. |
+| `[2]` | secondary | The Pull Requests series. |
+| `[3]` | text | Values and labels. Muted text (deltas, subtitles) is this color mixed into the background. |
+| `[4]` | tertiary, optional | The Pushes series. When omitted it is the primary color with its hue turned 120 degrees. |
+
+```yaml
+- uses: spatelpatidar/repobeats@v0.3.0
+  with:
+    repo: spatelpatidar/respondo-grpc
+    colors: "0b1020,ff4d8d,4dd2ff,eef1ff,ffd166"   # bg, primary, secondary, text, tertiary
+```
+
+Accepted forms: `#rrggbb` or `#rgb`, with or without the `#`, separated by commas or spaces, or a JSON array. In a workflow file, leave out the `#` or quote the value, because YAML reads an unquoted `#` as the start of a comment.
+
+Every generated SVG starts with a comment that records the mapping, so you can check which position ended up where:
+
+```
+<!-- repobeats colors: [0] background=#0b1020, [1] primary=#ff4d8d, [2] secondary=#4dd2ff, [3] text=#eef1ff, [4] tertiary=#ffd166 -->
+```
+
+Some colors stay fixed on purpose: the green and red of trend arrows (a light or dark variant is picked from your background), and the GitHub language colors on the `languages` card. An invalid list stops the run with a message naming the position, for example ``colors[1] (primary) is `#12345`: use #rgb or #rrggbb``.
+
+## Animation
+
+Cards animate by default, using CSS inside the SVG, so it works when the file is embedded with `<img>` or `![]()` and needs no JavaScript.
+
+| Where | Effect |
+| --- | --- |
+| All cards | Panels rise and fade in one after another. |
+| `activity` | Chart bars grow from the baseline in a left-to-right wave. Header day strip and contributor heat cells fade in. A ring pings around the header icon, and the trend arrows bob slowly. |
+| `languages` | The stacked bar wipes in from the left, then the legend rows rise. |
+| `contributors` | Rows rise in and each bar grows from the left. |
+| `overview` | Tiles rise in one after another. |
+
+Viewers who turn on "reduce motion" in their system settings see the finished card with no movement. `animate: false` removes the animation CSS from the file entirely.
 
 ## Cards
 
@@ -151,6 +196,9 @@ If you use another owner or name, change the `image:` line in `action.yml` and t
 ```bash
 cargo build --release
 GITHUB_TOKEN=ghp_xxx ./target/release/repobeats --repo owner/name --card languages --theme nord --filename card.svg
+
+# custom colors: background, primary, secondary, text, tertiary (optional)
+./target/release/repobeats --repo owner/name --colors "#0b1020,#ff4d8d,#4dd2ff,#eef1ff,#ffd166"
 ```
 
 Every option is also available as a `REPOBEATS_<NAME>` environment variable (`REPOBEATS_REPO`, `REPOBEATS_CARD`, `REPOBEATS_PERIOD`, ...). `GITHUB_API_URL` is honored, so GitHub Enterprise Server works.
@@ -159,7 +207,8 @@ Every option is also available as a `REPOBEATS_<NAME>` environment variable (`RE
 
 - `src/collector.rs` reads commits and issues/pull requests for the last 730 days (two full 365-day windows, so any period can be compared with the one before it), plus languages, repository details and the latest release.
 - `src/model.rs` buckets activity per day, ranks contributors and parses repository details.
-- `src/card/render.rs` draws the activity card and holds the themes. `src/card/render/extra.rs` draws the languages, contributors and overview cards.
+- `src/card/colors.rs` parses the `colors` list and derives the extra shades.
+- `src/card/render.rs` draws the activity card and holds the themes and the animation CSS. `src/card/render/extra.rs` draws the languages, contributors and overview cards.
 - `src/main.rs` is the command line the Action calls.
 
 ## Development

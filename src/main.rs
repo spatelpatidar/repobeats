@@ -3,8 +3,8 @@ use std::{env, fs, path::PathBuf, process::ExitCode};
 use anyhow::{Context, Result, bail};
 use repobeats::{
     card::{
-        CardKind, CardOptions, CardRenderer, CardSize, CardTheme, PeriodDays, SvgCardRenderer,
-        render_contributors, render_languages, render_overview,
+        CardKind, CardOptions, CardRenderer, CardSize, CardTheme, ColorScheme, PeriodDays,
+        SvgCardRenderer, render_contributors, render_languages, render_overview,
     },
     collector::Collector,
     domain::RepositoryName,
@@ -17,11 +17,22 @@ Usage: repobeats [--repo OWNER/NAME] [--user OWNER]
                  [--card activity|languages|contributors|overview]
                  [--theme light|dark|github-dimmed|dracula|nord|tokyo-night|solarized-light]
                  [--size small|medium|large] [--period 7|14|30|90|180|365]
+                 [--colors \"#bg,#primary,#secondary,#text[,#tertiary]\"]
+                 [--animate true|false]
                  [--filename FILE.svg] [--max-pages N]
 
 Token (optional for public repositories) is read from REPOBEATS_TOKEN,
 then GITHUB_TOKEN. If --repo is omitted, GITHUB_REPOSITORY is used.
-Every option can also be set with a REPOBEATS_<NAME> environment variable.";
+Every option can also be set with a REPOBEATS_<NAME> environment variable.
+
+--colors takes 4 or 5 hex codes. The position decides the role and replaces --theme:
+  [0] background   card background (or `transparent`); panels and borders derive from it
+  [1] primary      titles, header icon and strip, Issues series, contributor names and bars
+  [2] secondary    Pull Requests series
+  [3] text         values and labels; muted text derives from it
+  [4] tertiary     Pushes series (optional, derived from primary when omitted)
+Example: --colors \"#0d1117,#58a6ff,#bc8cff,#e6edf3,#f78166\"
+--animate false writes a static card (animations are on by default).";
 
 #[derive(Default)]
 struct Args {
@@ -31,6 +42,8 @@ struct Args {
     theme: Option<String>,
     size: Option<String>,
     period: Option<String>,
+    colors: Option<String>,
+    animate: Option<String>,
     filename: Option<String>,
     max_pages: Option<String>,
 }
@@ -51,6 +64,8 @@ impl Args {
                 "--theme" => &mut args.theme,
                 "--size" => &mut args.size,
                 "--period" => &mut args.period,
+                "--colors" => &mut args.colors,
+                "--animate" => &mut args.animate,
                 "--filename" => &mut args.filename,
                 "--max-pages" => &mut args.max_pages,
                 other => bail!("unknown argument `{other}`\n\n{USAGE}"),
@@ -100,6 +115,15 @@ fn enum_value<T: serde::de::DeserializeOwned + Default>(
     }
 }
 
+fn boolean(value: Option<String>, what: &str, default: bool) -> Result<bool> {
+    match value.as_deref().map(str::to_ascii_lowercase).as_deref() {
+        None => Ok(default),
+        Some("true" | "on" | "yes" | "1") => Ok(true),
+        Some("false" | "off" | "no" | "0") => Ok(false),
+        Some(other) => bail!("invalid {what} `{other}` (use true or false)"),
+    }
+}
+
 async fn run() -> Result<()> {
     let mut args = Args::parse()?;
     let repository = repository(&mut args)?;
@@ -122,6 +146,10 @@ async fn run() -> Result<()> {
                 PeriodDays::try_from(days.parse::<u16>().context("period must be a number")?)?
             }
         },
+        colors: pick(args.colors.take(), "COLORS")
+            .map(|list| list.parse::<ColorScheme>())
+            .transpose()?,
+        animate: boolean(pick(args.animate.take(), "ANIMATE"), "animate", true)?,
     };
     let filename = PathBuf::from(
         pick(args.filename.take(), "FILENAME").unwrap_or_else(|| "repobeats.svg".to_owned()),

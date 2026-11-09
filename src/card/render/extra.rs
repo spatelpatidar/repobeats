@@ -15,7 +15,10 @@ use svg::{
     },
 };
 
-use super::{CardOptions, CardRenderError, Palette, STYLE, opacity, panel, truncate_name};
+use super::{
+    CardOptions, CardRenderError, Palette, begin_section, color_comment, end_section, opacity,
+    panel, style, truncate_name,
+};
 use crate::{
     domain::RepositoryName,
     model::{ActivitySnapshot, RepoOverview},
@@ -26,7 +29,7 @@ const INNER: u32 = 813;
 
 /// Wraps `body` in an SVG whose pixel size follows `options.size` and whose
 /// height follows the content (`view_height` in the 814-wide coordinate space).
-fn finish(body: String, view_height: u32, options: CardOptions, palette: Palette) -> String {
+fn finish(body: String, view_height: u32, options: CardOptions, palette: &Palette) -> String {
     let (width, _) = options.size.dimensions();
     let height = (f64::from(width) * f64::from(view_height) / f64::from(WIDTH)).round() as u32;
     Document::new()
@@ -34,14 +37,15 @@ fn finish(body: String, view_height: u32, options: CardOptions, palette: Palette
         .set("height", height)
         .set("viewBox", (0, 0, WIDTH, view_height))
         .set("fill", "none")
-        .add(Style::new(STYLE))
+        .add(color_comment(&options))
+        .add(Style::new(style(options.animate)))
         .add(
             Rectangle::new()
                 .set("x", 0.5)
                 .set("y", 0.5)
                 .set("width", INNER)
                 .set("height", view_height.saturating_sub(1))
-                .set("fill", palette.background),
+                .set("fill", palette.background.to_string()),
         )
         .add(Blob::new(body))
         .to_string()
@@ -180,25 +184,27 @@ pub fn render_languages(
 ) -> String {
     const SHOWN: usize = 8;
     const COLUMNS: usize = 4;
-    let palette = Palette::for_theme(options.theme);
+    let palette = &Palette::resolve(&options);
     let total: u64 = languages.iter().map(|(_, bytes)| bytes).sum();
     let mut body = String::new();
 
     if total == 0 {
+        begin_section(&mut body, 0);
         panel(&mut body, 0, 0, INNER, 47, palette);
         label(
             &mut body,
-            plain(12, 29, "sans small bold", palette.accent),
+            plain(12, 29, "sans small bold", &palette.accent),
             "Languages",
         );
         label(
             &mut body,
             Label {
                 end: true,
-                ..plain(801, 29, "mono smaller", palette.secondary_text)
+                ..plain(801, 29, "mono smaller", &palette.secondary_text)
             },
             format!("No language data for {repository}"),
         );
+        end_section(&mut body);
         return finish(body, 48, options, palette);
     }
 
@@ -209,23 +215,25 @@ pub fn render_languages(
     }
     let rows = shown.len().div_ceil(COLUMNS) as u32;
     let panel_height = 82 + (rows - 1) * 24 + 18;
+    begin_section(&mut body, 0);
     panel(&mut body, 0, 0, INNER, panel_height, palette);
     label(
         &mut body,
-        plain(12, 29, "sans small bold", palette.accent),
+        plain(12, 29, "sans small bold", &palette.accent),
         "Languages",
     );
     label(
         &mut body,
         Label {
             end: true,
-            ..plain(801, 29, "mono smaller", palette.secondary_text)
+            ..plain(801, 29, "mono smaller", &palette.secondary_text)
         },
         repository.to_string(),
     );
+    end_section(&mut body);
 
     body.push_str(
-        r#"<clipPath id="lang-clip"><rect x="12" y="44" width="789" height="10" rx="5"/></clipPath><g clip-path="url(#lang-clip)">"#,
+        r#"<clipPath id="lang-clip"><rect x="12" y="44" width="789" height="10" rx="5"/></clipPath><g clip-path="url(#lang-clip)"><g class="wipe w0">"#,
     );
     let mut cursor = 12.0_f64;
     for (name, bytes) in &shown {
@@ -238,11 +246,12 @@ pub fn render_languages(
         .unwrap();
         cursor += width;
     }
-    body.push_str("</g>");
+    body.push_str("</g></g>");
 
     for (index, (name, bytes)) in shown.iter().enumerate() {
         let x = 12 + (index % COLUMNS) as u32 * 199;
         let y = 82 + (index / COLUMNS) as u32 * 24;
+        begin_section(&mut body, index + 2);
         write!(
             body,
             r#"<circle cx="{}" cy="{}" r="5" fill="{}"/>"#,
@@ -253,17 +262,18 @@ pub fn render_languages(
         .unwrap();
         label(
             &mut body,
-            plain(x + 16, y, "sans smaller", palette.text),
+            plain(x + 16, y, "sans smaller", &palette.text),
             ellipsize(name, 13),
         );
         label(
             &mut body,
             Label {
                 end: true,
-                ..plain(x + 178, y, "mono smaller", palette.secondary_text)
+                ..plain(x + 178, y, "mono smaller", &palette.secondary_text)
             },
             percent(*bytes, total),
         );
+        end_section(&mut body);
     }
     finish(body, panel_height + 1, options, palette)
 }
@@ -280,7 +290,7 @@ pub fn render_contributors(
     if snapshot.current.len() < days {
         return Err(CardRenderError(days));
     }
-    let palette = Palette::for_theme(options.theme);
+    let palette = &Palette::resolve(&options);
     let mut ranked = snapshot
         .contributors
         .iter()
@@ -296,17 +306,18 @@ pub fn render_contributors(
     ranked.truncate(MAX_ROWS);
 
     let mut body = String::new();
+    begin_section(&mut body, 0);
     panel(&mut body, 0, 0, INNER, 47, palette);
     label(
         &mut body,
-        plain(12, 29, "sans small bold", palette.accent),
+        plain(12, 29, "sans small bold", &palette.accent),
         "Top Contributors",
     );
     label(
         &mut body,
         Label {
             end: true,
-            ..plain(801, 29, "mono smaller", palette.secondary_text)
+            ..plain(801, 29, "mono smaller", &palette.secondary_text)
         },
         format!(
             "{people} {} · {all} contributions · last {days} days",
@@ -317,32 +328,39 @@ pub fn render_contributors(
             }
         ),
     );
+    end_section(&mut body);
 
     if ranked.is_empty() {
+        begin_section(&mut body, 1);
         panel(&mut body, 0, 58, INNER, 40, palette);
         label(
             &mut body,
-            plain(12, 83, "sans smaller", palette.secondary_text),
+            plain(12, 83, "sans smaller", &palette.secondary_text),
             "No activity in this period",
         );
+        end_section(&mut body);
         return Ok(finish(body, 99, options, palette));
     }
 
     let rows = ranked.len() as u32;
     let panel_height = rows * 24 + 12;
+    begin_section(&mut body, 1);
     panel(&mut body, 0, 58, INNER, panel_height, palette);
+    end_section(&mut body);
     let max = ranked[0].1;
     for (index, (name, total)) in ranked.iter().enumerate() {
         let y = 58 + 6 + index as u32 * 24;
+        begin_section(&mut body, index + 2);
         label(
             &mut body,
-            plain(12, y + 15, "mono bold smaller", palette.contributor),
+            plain(12, y + 15, "mono bold smaller", &palette.contributor),
             truncate_name(name),
         );
         let width = (f64::from(*total) / f64::from(max) * 500.0).max(3.0);
         write!(
             body,
-            r#"<rect x="200" y="{}" width="{width:.1}" height="10" rx="2" fill="{}" opacity="{:.2}"/>"#,
+            r#"<rect class="hbar w{}" x="200" y="{}" width="{width:.1}" height="10" rx="2" fill="{}" opacity="{:.2}"/>"#,
+            index.min(15),
             y + 5,
             palette.contributor,
             opacity(*total, max).max(0.45),
@@ -352,13 +370,14 @@ pub fn render_contributors(
             &mut body,
             Label {
                 end: true,
-                ..plain(801, y + 15, "mono smaller", palette.secondary_text)
+                ..plain(801, y + 15, "mono smaller", &palette.secondary_text)
             },
             format!(
                 "{total} ({}%)",
                 trim_percent(f64::from(*total) * 100.0 / f64::from(all))
             ),
         );
+        end_section(&mut body);
     }
     Ok(finish(body, 58 + panel_height + 1, options, palette))
 }
@@ -379,9 +398,11 @@ struct Tile<'a> {
     name: &'a str,
     value: String,
     value_size: u32,
+    step: usize,
 }
 
-fn tile(svg: &mut String, tile: Tile<'_>, palette: Palette) {
+fn tile(svg: &mut String, tile: Tile<'_>, palette: &Palette) {
+    begin_section(svg, tile.step);
     panel(svg, tile.x, tile.y, tile.width, tile.height, palette);
     write!(
         svg,
@@ -398,7 +419,7 @@ fn tile(svg: &mut String, tile: Tile<'_>, palette: Palette) {
             tile.x + 20,
             tile.y + 24,
             "sans smaller",
-            palette.secondary_text,
+            &palette.secondary_text,
         ),
         tile.name,
     );
@@ -410,16 +431,17 @@ fn tile(svg: &mut String, tile: Tile<'_>, palette: Palette) {
                 tile.x + 20,
                 tile.y + tile.height - 13,
                 "sans bold",
-                palette.text,
+                &palette.text,
             )
         },
         tile.value,
     );
+    end_section(svg);
 }
 
 /// Stars, forks, open issues, watchers, license, language, last push and latest release.
 pub fn render_overview(overview: &RepoOverview, options: CardOptions) -> String {
-    let palette = Palette::for_theme(options.theme);
+    let palette = &Palette::resolve(&options);
     let mut body = String::new();
 
     let header = if overview.description.is_some() {
@@ -427,26 +449,29 @@ pub fn render_overview(overview: &RepoOverview, options: CardOptions) -> String 
     } else {
         47
     };
+    begin_section(&mut body, 0);
     panel(&mut body, 0, 0, INNER, header, palette);
     label(
         &mut body,
-        plain(12, 29, "sans small bold", palette.accent),
+        plain(12, 29, "sans small bold", &palette.accent),
         overview.repository.to_string(),
     );
     if let Some(description) = &overview.description {
         label(
             &mut body,
-            plain(12, 52, "sans smaller", palette.secondary_text),
+            plain(12, 52, "sans smaller", &palette.secondary_text),
             ellipsize(description, 110),
         );
     }
+    end_section(&mut body);
 
     let top = header + 10;
+    let stripes = &palette.stripes;
     let first = [
-        ("#e3b341", "Stars", compact(overview.stars)),
-        ("#406CC4", "Forks", compact(overview.forks)),
-        ("#BA473E", "Open issues", compact(overview.open_issues)),
-        ("#7B58C9", "Watchers", compact(overview.watchers)),
+        (&stripes[0], "Stars", compact(overview.stars)),
+        (&stripes[1], "Forks", compact(overview.forks)),
+        (&stripes[2], "Open issues", compact(overview.open_issues)),
+        (&stripes[3], "Watchers", compact(overview.watchers)),
     ];
     for (index, (stripe, name, value)) in first.into_iter().enumerate() {
         tile(
@@ -460,6 +485,7 @@ pub fn render_overview(overview: &RepoOverview, options: CardOptions) -> String 
                 name,
                 value,
                 value_size: 26,
+                step: index + 1,
             },
             palette,
         );
@@ -467,7 +493,7 @@ pub fn render_overview(overview: &RepoOverview, options: CardOptions) -> String 
 
     let second = [
         (
-            "#459631",
+            &stripes[4],
             "License",
             overview
                 .license
@@ -475,7 +501,7 @@ pub fn render_overview(overview: &RepoOverview, options: CardOptions) -> String 
                 .unwrap_or_else(|| "None".to_owned()),
         ),
         (
-            "#00ADD8",
+            &stripes[5],
             "Main language",
             overview
                 .language
@@ -483,7 +509,7 @@ pub fn render_overview(overview: &RepoOverview, options: CardOptions) -> String 
                 .unwrap_or_else(|| "n/a".to_owned()),
         ),
         (
-            "#ec4899",
+            &stripes[6],
             "Last push",
             overview.pushed_at.map_or_else(
                 || "n/a".to_owned(),
@@ -491,7 +517,7 @@ pub fn render_overview(overview: &RepoOverview, options: CardOptions) -> String 
             ),
         ),
         (
-            "#ff7a35",
+            &stripes[7],
             "Latest release",
             overview
                 .latest_release
@@ -511,6 +537,7 @@ pub fn render_overview(overview: &RepoOverview, options: CardOptions) -> String 
                 name,
                 value: ellipsize(&value, 14),
                 value_size: 16,
+                step: index + 5,
             },
             palette,
         );

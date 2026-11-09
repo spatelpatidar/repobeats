@@ -26,6 +26,14 @@ inputs:
     description: "`light`, `dark`, `github-dimmed`, `dracula`, `nord`, `tokyo-night` or `solarized-light`."
     required: false
     default: light
+  colors:
+    description: "Custom colors, 4 or 5 hex codes separated by commas. Replaces `theme`. The position sets the role: 0 background (or `transparent`), 1 primary (titles, header, Issues, contributors), 2 secondary (Pull Requests), 3 text, 4 tertiary (Pushes, optional). Example: `0d1117,58a6ff,bc8cff,e6edf3,f78166`. Write the codes without `#`, or quote the whole value, because YAML treats `#` as a comment."
+    required: false
+    default: ''
+  animate:
+    description: "`true` (default) plays entrance animations and a few slow loops. `false` writes a static card. Viewers with reduced motion enabled always get a static card."
+    required: false
+    default: 'true'
   size:
     description: "Width of the card: `small` (610px), `medium` (814px) or `large` (1221px). Height follows the card."
     required: false
@@ -53,4 +61,4 @@ inputs:
 
 runs:
   using: docker
-  image: docker://ghcr.io/spatelpatidar/repobeats:v0.3.0
+  image: docker://ghcr.io/spatelpatidar/repobeats:v0.3.1
