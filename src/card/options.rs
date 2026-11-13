@@ -41,6 +41,8 @@ pub enum CardKind {
     Contributors,
     /// Stars, forks, issues, license, last push and latest release.
     Overview,
+    /// Line graph of daily contributions. See [`super::GraphOptions`].
+    Graph,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq)]

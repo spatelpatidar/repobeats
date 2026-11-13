@@ -19,7 +19,7 @@ inputs:
     required: false
     default: ''
   card:
-    description: "Which card to draw: `activity` (issues, pull requests, pushes, top contributors), `languages` (language breakdown), `contributors` (ranked contributors with bars) or `overview` (stars, forks, issues, license, last push, latest release)."
+    description: "Which card to draw: `activity` (issues, pull requests, pushes, top contributors), `languages` (language breakdown), `contributors` (ranked contributors with bars) or `overview` (stars, forks, issues, license, last push, latest release) or `graph` (line graph of daily contributions, see `graph_options`)."
     required: false
     default: activity
   theme:
@@ -42,6 +42,10 @@ inputs:
     description: "Days to summarise: 7, 14, 30, 90, 180 or 365. Used by the `activity` and `contributors` cards."
     required: false
     default: '30'
+  graph_options:
+    description: "Only for `card: graph`. URL query string with the graph options, for example `days=31&area=true&line=58a6ff&point=f78166`. Supported: days, from, to, metric, area, grid, smooth, hide_title, custom_title, hide_border, radius, height, bg_color, border_color, color, title_color, line, point, area_color."
+    required: false
+    default: ''
   filename:
     description: Path of the SVG file to write, relative to the workspace.
     required: false
@@ -61,4 +65,4 @@ inputs:
 
 runs:
   using: docker
-  image: docker://ghcr.io/spatelpatidar/repobeats:v0.3.1
+  image: docker://ghcr.io/spatelpatidar/repobeats:v0.4.0

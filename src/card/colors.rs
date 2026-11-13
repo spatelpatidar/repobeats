@@ -26,7 +26,8 @@ pub struct Rgb(pub u8, pub u8, pub u8);
 impl Rgb {
     const WHITE: Self = Self(255, 255, 255);
 
-    fn parse(value: &str) -> Option<Self> {
+    /// Parses `#rgb`, `#rrggbb`, or either without the `#`.
+    pub fn parse(value: &str) -> Option<Self> {
         let digits = value.strip_prefix('#').unwrap_or(value);
         if !digits.chars().all(|c| c.is_ascii_hexdigit()) {
             return None;

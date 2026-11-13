@@ -1,0 +1,19 @@
+# The HTTP server and params page. Separate from the Action image (Dockerfile).
+#   docker build -f Dockerfile.server -t repobeats-server .
+#   docker run -p 5100:5100 -e REPOBEATS_TOKEN=ghp_xxx repobeats-server
+FROM rust:1-slim-bookworm AS builder
+WORKDIR /app
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+COPY web ./web
+RUN cargo build --release --locked --features server --bin repobeats-server
+
+FROM debian:bookworm-slim
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /app/target/release/repobeats-server /usr/local/bin/repobeats-server
+ENV PORT=5100
+EXPOSE 5100
+USER nobody
+ENTRYPOINT ["repobeats-server"]

@@ -3,8 +3,9 @@ use std::{env, fs, path::PathBuf, process::ExitCode};
 use anyhow::{Context, Result, bail};
 use repobeats::{
     card::{
-        CardKind, CardOptions, CardRenderer, CardSize, CardTheme, ColorScheme, PeriodDays,
-        SvgCardRenderer, render_contributors, render_languages, render_overview,
+        CardKind, CardOptions, CardRenderer, CardSize, CardTheme, ColorScheme, GraphOptions,
+        PeriodDays, SvgCardRenderer, render_contributors, render_graph, render_languages,
+        render_overview,
     },
     collector::Collector,
     domain::RepositoryName,
@@ -19,6 +20,7 @@ Usage: repobeats [--repo OWNER/NAME] [--user OWNER]
                  [--size small|medium|large] [--period 7|14|30|90|180|365]
                  [--colors \"#bg,#primary,#secondary,#text[,#tertiary]\"]
                  [--animate true|false]
+                 [--graph-options \"days=31&area=true&line=58a6ff\"]
                  [--filename FILE.svg] [--max-pages N]
 
 Token (optional for public repositories) is read from REPOBEATS_TOKEN,
@@ -32,7 +34,12 @@ Every option can also be set with a REPOBEATS_<NAME> environment variable.
   [3] text         values and labels; muted text derives from it
   [4] tertiary     Pushes series (optional, derived from primary when omitted)
 Example: --colors \"#0d1117,#58a6ff,#bc8cff,#e6edf3,#f78166\"
---animate false writes a static card (animations are on by default).";
+--animate false writes a static card (animations are on by default).
+
+--card graph draws a contribution line graph. Its extra options go in
+--graph-options as a URL query string (days, from, to, metric, area, grid,
+smooth, hide_title, custom_title, hide_border, radius, height, bg_color,
+border_color, color, title_color, line, point, area_color).";
 
 #[derive(Default)]
 struct Args {
@@ -44,6 +51,7 @@ struct Args {
     period: Option<String>,
     colors: Option<String>,
     animate: Option<String>,
+    graph_options: Option<String>,
     filename: Option<String>,
     max_pages: Option<String>,
 }
@@ -66,6 +74,7 @@ impl Args {
                 "--period" => &mut args.period,
                 "--colors" => &mut args.colors,
                 "--animate" => &mut args.animate,
+                "--graph-options" => &mut args.graph_options,
                 "--filename" => &mut args.filename,
                 "--max-pages" => &mut args.max_pages,
                 other => bail!("unknown argument `{other}`\n\n{USAGE}"),
@@ -130,7 +139,7 @@ async fn run() -> Result<()> {
     let options = CardOptions {
         kind: enum_value::<CardKind>(
             pick(args.card.take(), "CARD"),
-            "card (activity, languages, contributors or overview)",
+            "card (activity, languages, contributors, overview or graph)",
         )?,
         theme: enum_value::<CardTheme>(
             pick(args.theme.take(), "THEME"),
@@ -151,6 +160,14 @@ async fn run() -> Result<()> {
             .transpose()?,
         animate: boolean(pick(args.animate.take(), "ANIMATE"), "animate", true)?,
     };
+    // Parsed before any network call, so a typo fails fast.
+    let graph = (options.kind == CardKind::Graph)
+        .then(|| {
+            GraphOptions::from_query(
+                &pick(args.graph_options.take(), "GRAPH_OPTIONS").unwrap_or_default(),
+            )
+        })
+        .transpose()?;
     let filename = PathBuf::from(
         pick(args.filename.take(), "FILENAME").unwrap_or_else(|| "repobeats.svg".to_owned()),
     );
@@ -190,6 +207,14 @@ async fn run() -> Result<()> {
         CardKind::Overview => {
             let overview = collector.overview(&repository).await?;
             render_overview(&overview, options)
+        }
+        CardKind::Graph => {
+            let graph = graph.context("graph options were not parsed")?;
+            let today = chrono::Utc::now().date_naive();
+            let snapshot = collector
+                .collect_days(&repository, graph.lookback_days(today))
+                .await?;
+            render_graph(&snapshot, options, &graph)?
         }
     };
 

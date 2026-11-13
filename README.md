@@ -53,7 +53,7 @@ Add a step to a workflow. It has the same shape as `lowlighter/metrics`:
 - uses: actions/checkout@v4
 
 - name: Repobeats - respondo-grpc
-  uses: spatelpatidar/repobeats@v0.3.0
+  uses: spatelpatidar/repobeats@v0.4.0
   continue-on-error: true
   timeout-minutes: 10
   with:
@@ -81,12 +81,13 @@ Then embed the file:
 | `token` | empty | See [Tokens](#tokens). |
 | `user` | current repo owner | Only needed when `repo` is a bare name. |
 | `repo` | current repository | `owner/name`, or a bare name together with `user`. |
-| `card` | `activity` | `activity`, `languages`, `contributors` or `overview`. |
+| `card` | `activity` | `activity`, `languages`, `contributors`, `overview` or `graph`. |
 | `theme` | `light` | `light`, `dark`, `github-dimmed`, `dracula`, `nord`, `tokyo-night`, `solarized-light`. |
 | `colors` | empty | 4 or 5 hex codes. Replaces `theme`. See [Custom colors](#custom-colors). |
 | `animate` | `true` | `false` writes a static card. See [Animation](#animation). |
 | `size` | `medium` | Width: `small` (610px), `medium` (814px), `large` (1221px). Height follows the card. |
 | `period` | `30` | `7`, `14`, `30`, `90`, `180` or `365` days. Used by `activity` and `contributors`. |
+| `graph_options` | empty | Only for `card: graph`. A query string such as `days=31&area=true`. See [Contribution graph](#contribution-graph). |
 | `filename` | `repobeats.svg` | Path relative to the workspace. Parent folders are created. |
 | `max_pages` | `50` | API pages (100 items each) read per list. Raise it for very busy repositories. |
 | `output_action` | `none` | `none` or `commit`. |
@@ -105,7 +106,7 @@ Then embed the file:
 | `[4]` | tertiary, optional | The Pushes series. When omitted it is the primary color with its hue turned 120 degrees. |
 
 ```yaml
-- uses: spatelpatidar/repobeats@v0.3.0
+- uses: spatelpatidar/repobeats@v0.4.0
   with:
     repo: spatelpatidar/respondo-grpc
     colors: "0b1020,ff4d8d,4dd2ff,eef1ff,ffd166"   # bg, primary, secondary, text, tertiary
@@ -143,8 +144,75 @@ Viewers who turn on "reduce motion" in their system settings see the finished ca
 | `contributors` | Up to 10 contributors for the period, with a bar and share per person. | Same as `activity`. |
 | `languages` | Stacked bar and legend of the 8 largest languages, the rest grouped as "Other". | 1 |
 | `overview` | Stars, forks, open issues, watchers, license, main language, last push, latest release, description. | 2 |
+| `graph` | Line graph of daily contributions over 1 to 365 days or a date range. See [Contribution graph](#contribution-graph). | Commits and issues, only as many days as the graph needs. |
 
 `languages` and `overview` are cheap and work well without a token on a single public repository. `activity` and `contributors` read two years of history, so on busy repositories pass a token and raise `max_pages` if the step reports a pagination error.
+
+## Contribution graph
+
+`card: graph` draws a line graph of daily activity, in the style of [github-readme-activity-graph](https://github.com/Ashutosh00710/github-readme-activity-graph). One point is one day, counted as pushes + issues opened + pull requests opened (change it with `metric`). Unlike that project, which graphs a user's profile, this graphs one repository.
+
+In a workflow, put the options in `graph_options` as a query string:
+
+```yaml
+- uses: spatelpatidar/repobeats@main
+  with:
+    card: graph
+    repo: spatelpatidar/repobeats
+    theme: dracula
+    graph_options: days=31&area=true&line=ff79c6&point=ffb86c
+    filename: graph.svg
+```
+
+Or serve it over HTTP and embed a URL, see [Graph server](#graph-server).
+
+| Parameter | Default | Notes |
+| --- | --- | --- |
+| `days` | `31` | Whole number, 1 to 365. |
+| `from`, `to` | | `YYYY-MM-DD`, inclusive, both required. Replace `days`. Must fall inside the last 365 days. |
+| `metric` | `contributions` | `contributions`, `pushes`, `issues` or `pulls` (issues and pull requests are counted when opened). |
+| `area` | `false` | Fill under the line. |
+| `grid` | `true` | Grid lines. The zero line stays. |
+| `smooth` | `true` | Curved line. `false` gives straight segments. |
+| `hide_title` | `false` | Remove the title row. |
+| `custom_title` | `owner/name Contribution Graph` | Up to 64 characters, longer is cut. |
+| `hide_border` | `false` | No border. |
+| `radius` | `0` | Corner radius, 0 to 16 (larger values are set to 16). |
+| `height` | `318` | 200 to 600 (out-of-range values are clamped). The width follows `size`. |
+| `bg_color` | theme | Hex code with or without `#`, or `transparent`. |
+| `border_color`, `color`, `title_color`, `line`, `point`, `area_color` | theme | Hex codes. `color` is the text color. |
+
+Booleans accept `true`/`false`, `on`/`off`, `yes`/`no`, `1`/`0`. Invalid values are an error, not silently ignored. Parameters this card does not know are ignored, so `&v=2` works as a cache buster.
+
+The graph also takes the usual `theme`, `size` and `animate` options (on the server they are query parameters too). The `colors` list is not used by this card: use the per-part parameters above.
+
+Names differ from github-readme-activity-graph where this project already had a convention: its `username` is `user` plus `repo` here, and `theme` names are this project's (`light`, `dark`, `github-dimmed`, `dracula`, `nord`, `tokyo-night`, `solarized-light`).
+
+## Graph server
+
+A small HTTP server returns the graph for a URL, and serves a page that builds the URL for you. It is optional and not part of the Action image.
+
+```bash
+GITHUB_TOKEN=ghp_xxx cargo run --release --features server --bin repobeats-server
+# open http://localhost:5100
+curl 'http://localhost:5100/graph?user=spatelpatidar&repo=repobeats&days=31&area=true&theme=dark'
+```
+
+Then embed it:
+
+```md
+![Contribution graph](https://your-host/graph?user=spatelpatidar&repo=repobeats&days=31&area=true)
+```
+
+| Route | Returns |
+| --- | --- |
+| `GET /` | The page: a form for every parameter, a live preview, and Markdown/HTML/URL to copy. |
+| `GET /graph` | The SVG. Needs `repo` and `user` (or `repo=owner/name`), plus any [graph parameters](#contribution-graph), `theme`, `size` and `animate`. |
+| `GET /healthz` | `ok`. |
+
+Errors are also SVG cards, with a status code: `400` for a bad parameter, `404` unknown or private repository, `429` GitHub rate limit, `502` other GitHub failures. Successful responses are cached for 30 minutes (`Cache-Control: public, max-age=1800`).
+
+Settings, all environment variables: `PORT` (5100), `REPOBEATS_TOKEN` or `GITHUB_TOKEN`, `GITHUB_API_URL`, `REPOBEATS_CACHE_SECONDS` (1800). Set a token: without one GitHub allows 60 requests an hour for the whole server, which a few visitors will use up. The token can read whatever it can access, and the server will draw any repository that token can see, so do not give a server a token with access to private repositories unless you want those graphs public. A `Dockerfile.server` is included.
 
 ## Tokens
 
@@ -209,13 +277,15 @@ Every option is also available as a `REPOBEATS_<NAME>` environment variable (`RE
 - `src/model.rs` buckets activity per day, ranks contributors and parses repository details.
 - `src/card/colors.rs` parses the `colors` list and derives the extra shades.
 - `src/card/render.rs` draws the activity card and holds the themes and the animation CSS. `src/card/render/extra.rs` draws the languages, contributors and overview cards.
-- `src/main.rs` is the command line the Action calls.
+- `src/card/graph_options.rs` parses the graph parameters and `src/card/render/graph.rs` draws the graph. `src/params.rs` holds the parsing helpers shared with the server.
+- `src/main.rs` is the command line the Action calls. `src/server.rs` and `web/index.html` are the optional server and its page (`--features server`).
 
 ## Development
 
 ```bash
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
+cargo clippy --all-targets --features server -- -D warnings
 cargo test
 ```
 
