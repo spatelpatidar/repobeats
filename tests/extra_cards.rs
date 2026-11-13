@@ -88,13 +88,14 @@ fn card_kinds_parse_and_default_to_activity() {
         ("languages", CardKind::Languages),
         ("contributors", CardKind::Contributors),
         ("overview", CardKind::Overview),
+        ("graph", CardKind::Graph),
     ] {
         assert_eq!(
             serde_json::from_value::<CardKind>(json!(name)).unwrap(),
             kind
         );
     }
-    assert!(serde_json::from_value::<CardKind>(json!("graph")).is_err());
+    assert!(serde_json::from_value::<CardKind>(json!("pie")).is_err());
 }
 
 #[test]

@@ -86,7 +86,7 @@ fn plain<'a>(x: u32, y: u32, class: &'a str, fill: &'a str) -> Label<'a> {
     }
 }
 
-fn ellipsize(text: &str, max: usize) -> String {
+pub(super) fn ellipsize(text: &str, max: usize) -> String {
     if text.chars().count() <= max {
         text.to_owned()
     } else {

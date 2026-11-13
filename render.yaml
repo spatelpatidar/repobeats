@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: repobeats-server
+    runtime: docker
+    dockerfilePath: ./Dockerfile.server
+    healthCheckPath: /healthz
+    envVars:
+      - key: REPOBEATS_TOKEN
+        sync: false   # you enter the value in the dashboard

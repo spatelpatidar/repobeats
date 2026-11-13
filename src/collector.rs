@@ -48,8 +48,19 @@ impl Collector {
     }
 
     pub async fn collect(&self, repository: &RepositoryName) -> Result<ActivitySnapshot> {
+        self.collect_days(repository, COLLECTION_DAYS).await
+    }
+
+    /// Like [`Collector::collect`] but reads only the last `days` days, so a
+    /// 31-day graph does not page through two years of history. Days older
+    /// than that are left empty in the snapshot.
+    pub async fn collect_days(
+        &self,
+        repository: &RepositoryName,
+        days: i64,
+    ) -> Result<ActivitySnapshot> {
         let now = Utc::now();
-        let since = now - Duration::days(COLLECTION_DAYS);
+        let since = now - Duration::days(days.clamp(1, COLLECTION_DAYS));
         let (commits, issues) = tokio::try_join!(
             self.commits(repository, since, now),
             self.issues(repository, since),

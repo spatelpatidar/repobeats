@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Repobeats Graph</title>
+<meta name="description" content="Build a contribution graph for any GitHub repository and embed it as an SVG.">
+<style>
+  :root {
+    --bg: #ffffff; --panel: #f6f8fa; --border: #d0d7de; --text: #1f2328; --muted: #59636e;
+    --accent: #0969da; --accent-text: #ffffff; --danger: #cf222e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e;
+      --accent: #2f81f7; --accent-text: #ffffff; --danger: #f85149;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 1120px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 24px; }
+  .layout { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 24px; align-items: start; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+  form { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  fieldset { border: 0; margin: 0 0 16px; padding: 0; min-width: 0; }
+  legend { font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 0; margin-bottom: 8px; }
+  label { display: block; font-size: 13px; margin-bottom: 8px; }
+  label span { display: block; color: var(--muted); margin-bottom: 2px; }
+  input[type=text], input[type=number], input[type=date], select {
+    width: 100%; padding: 6px 8px; font: inherit; color: var(--text);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  }
+  input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
+  .checks label { display: flex; align-items: center; gap: 6px; margin: 0; }
+  .color { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .color span { flex: 0 0 96px; margin: 0; }
+  .color input[type=text] { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .swatch { width: 28px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: none; cursor: pointer; }
+  .output { min-width: 0; }
+  .preview {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px;
+    min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    background-image: repeating-conic-gradient(rgba(127,127,127,.08) 0% 25%, transparent 0% 50%);
+    background-size: 16px 16px;
+  }
+  .preview img { max-width: 100%; height: auto; display: block; }
+  .status { font-size: 13px; color: var(--muted); min-height: 20px; }
+  .status.error { color: var(--danger); }
+  .snippet { margin-top: 20px; }
+  .snippet h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 6px; }
+  .snippet-box { display: flex; gap: 8px; align-items: stretch; }
+  .snippet-box code {
+    flex: 1; min-width: 0; overflow-x: auto; white-space: pre; padding: 8px 10px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  button {
+    font: inherit; font-size: 13px; padding: 0 14px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  .reset { margin-top: 4px; padding: 6px 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Repobeats Graph</h1>
+  <p class="lead">Daily contributions of a GitHub repository as a line graph. Set the options, copy the link.</p>
+
+  <div class="layout">
+    <form id="form" autocomplete="off">
+      <fieldset>
+        <legend>Repository</legend>
+        <div class="row">
+          <label><span>User or org</span><input type="text" name="user" value="spatelpatidar" spellcheck="false"></label>
+          <label><span>Repository</span><input type="text" name="repo" value="repobeats" spellcheck="false"></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Data</legend>
+        <div class="row">
+          <label><span>Metric</span>
+            <select name="metric">
+              <option value="">Contributions</option>
+              <option value="pushes">Pushes</option>
+              <option value="issues">Issues opened</option>
+              <option value="pulls">Pull requests opened</option>
+            </select>
+          </label>
+          <label><span>Days (1 to 365)</span><input type="number" name="days" min="1" max="365" placeholder="31"></label>
+        </div>
+        <div class="row">
+          <label><span>From</span><input type="date" name="from"></label>
+          <label><span>To</span><input type="date" name="to"></label>
+        </div>
+        <p class="hint">A From/To range replaces Days. Both are needed.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Look</legend>
+        <div class="row">
+          <label><span>Theme</span>
+            <select name="theme">
+              <option value="">light</option>
+              <option>dark</option><option>github-dimmed</option><option>dracula</option>
+              <option>nord</option><option>tokyo-night</option><option>solarized-light</option>
+            </select>
+          </label>
+          <label><span>Size</span>
+            <select name="size"><option value="">medium</option><option>small</option><option>large</option></select>
+          </label>
+        </div>
+        <div class="row">
+          <label><span>Height (200 to 600)</span><input type="number" name="height" min="200" max="600" placeholder="318"></label>
+          <label><span>Corner radius (0 to 16)</span><input type="number" name="radius" min="0" max="16" placeholder="0"></label>
+        </div>
+        <label><span>Custom title</span><input type="text" name="custom_title" maxlength="64" placeholder="owner/repo Contribution Graph"></label>
+        <div class="checks">
+          <label><input type="checkbox" name="area"> Fill area</label>
+          <label><input type="checkbox" name="grid" data-default="on"> Grid</label>
+          <label><input type="checkbox" name="smooth" data-default="on"> Smooth line</label>
+          <label><input type="checkbox" name="animate" data-default="on"> Animate</label>
+          <label><input type="checkbox" name="hide_title"> Hide title</label>
+          <label><input type="checkbox" name="hide_border"> Hide border</label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Colors (hex, empty uses the theme)</legend>
+        <div id="colors"></div>
+        <button type="button" class="reset" id="reset">Reset all</button>
+      </fieldset>
+    </form>
+
+    <div class="output">
+      <div class="preview"><img id="img" alt="Contribution graph preview"><div class="status" id="status" role="status"></div></div>
+
+      <div class="snippet">
+        <h2>Markdown</h2>
+        <div class="snippet-box"><code id="md"></code><button class="primary" data-copy="md">Copy</button></div>
+      </div>
+      <div class="snippet">
+        <h2>HTML</h2>
+        <div class="snippet-box"><code id="html"></code><button data-copy="html">Copy</button></div>
+      </div>
+      <div class="snippet">
+        <h2>URL</h2>
+        <div class="snippet-box"><code id="url"></code><button data-copy="url">Copy</button></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  var COLORS = [
+    ["bg_color", "Background"], ["border_color", "Border"], ["color", "Text"],
+    ["title_color", "Title"], ["line", "Line"], ["point", "Points"], ["area_color", "Area"]
+  ];
+  var form = document.getElementById("form");
+  var img = document.getElementById("img");
+  var status = document.getElementById("status");
+  var colors = document.getElementById("colors");
+
+  COLORS.forEach(function (c) {
+    var row = document.createElement("div");
+    row.className = "color";
+    row.innerHTML = '<span></span><input type="text" name="' + c[0] + '" maxlength="11" spellcheck="false" placeholder="theme">' +
+      '<input type="color" class="swatch" aria-label="Pick ' + c[1] + ' color" value="#888888">';
+    row.firstChild.textContent = c[1];
+    colors.appendChild(row);
+    var text = row.querySelector("input[type=text]");
+    var swatch = row.querySelector("input[type=color]");
+    swatch.addEventListener("input", function () { text.value = swatch.value.slice(1); update(); });
+  });
+
+  function query() {
+    var q = new URLSearchParams();
+    var data = new FormData(form);
+    var user = (data.get("user") || "").trim(), repo = (data.get("repo") || "").trim();
+    if (repo.indexOf("/") < 0 && user) q.set("user", user);
+    if (repo) q.set("repo", repo);
+    ["metric", "days", "from", "to", "theme", "size", "height", "radius", "custom_title"].forEach(function (name) {
+      var v = (data.get(name) || "").trim();
+      if (v) q.set(name, v);
+    });
+    COLORS.forEach(function (c) {
+      var v = (data.get(c[0]) || "").trim().replace(/^#/, "");
+      if (v) q.set(c[0], v);
+    });
+    form.querySelectorAll("input[type=checkbox]").forEach(function (box) {
+      var on = box.dataset.default === "on";
+      if (box.checked !== on) q.set(box.name, box.checked ? "true" : "false");
+    });
+    return q.toString();
+  }
+
+  function setText(id, value) { document.getElementById(id).textContent = value; }
+
+  var timer;
+  function update() {
+    clearTimeout(timer);
+    timer = setTimeout(render, 350);
+  }
+
+  function render() {
+    var q = query();
+    var path = "/graph?" + q;
+    var absolute = location.origin + path;
+    setText("url", absolute);
+    setText("md", "![Contribution graph](" + absolute + ")");
+    setText("html", '<img src="' + absolute + '" alt="Contribution graph">');
+    status.className = "status";
+    status.textContent = "Loading…";
+    fetch(path).then(function (res) {
+      return res.text().then(function (body) { return { ok: res.ok, status: res.status, body: body }; });
+    }).then(function (r) {
+      // Show what the server returned, errors included: they are SVG cards too.
+      img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(r.body);
+      status.className = r.ok ? "status" : "status error";
+      status.textContent = r.ok ? "" : "The server answered " + r.status + ".";
+    }).catch(function () {
+      status.className = "status error";
+      status.textContent = "Could not reach the server.";
+    });
+  }
+
+  form.addEventListener("input", update);
+  form.addEventListener("change", update);
+  form.addEventListener("submit", function (e) { e.preventDefault(); });
+  document.getElementById("reset").addEventListener("click", function () {
+    form.reset();
+    form.querySelectorAll("input[type=checkbox]").forEach(function (b) { b.checked = b.dataset.default === "on"; });
+    update();
+  });
+  document.querySelectorAll("[data-copy]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var text = document.getElementById(btn.dataset.copy).textContent;
+      var done = function () { var old = btn.textContent; btn.textContent = "Copied"; setTimeout(function () { btn.textContent = old; }, 1200); };
+      if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () {});
+    });
+  });
+
+  form.querySelectorAll("input[type=checkbox]").forEach(function (b) { b.checked = b.dataset.default === "on"; });
+  render();
+})();
+</script>
+</body>
+</html>
