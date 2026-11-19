@@ -17,7 +17,7 @@ use svg::{
 };
 use thiserror::Error;
 
-use super::{CardOptions, Palette, color_comment, extra::ellipsize, style, wave};
+use super::{CardOptions, Palette, color_comment, extra::ellipsize, style};
 use crate::{
     card::graph_options::{Background, GraphColors, GraphOptions, GraphRange, LabelMode},
     model::ContributionCalendar,
@@ -350,8 +350,8 @@ pub fn render_graph(
         for (index, ((date, value), (x, y))) in days.iter().zip(&points).enumerate() {
             let _ = write!(
                 body,
-                r#"<circle class="cell w{}" cx="{x:.1}" cy="{y:.1}" r="{radius:.1}" fill="{}" stroke="{}" stroke-width="{ring}"><title>{}: {value}</title></circle>"#,
-                wave(index, count),
+                r#"<circle class="dot" style="animation-delay:{}ms" cx="{x:.1}" cy="{y:.1}" r="{radius:.1}" fill="{}" stroke="{}" stroke-width="{ring}"><title>{}: {value}</title></circle>"#,
+                (DRAW_DELAY_MS + DRAW_MS * index as f64 / (count.max(2) - 1) as f64).round(),
                 colors.point,
                 if colors.background == "transparent" {
                     "none"
@@ -396,7 +396,12 @@ const GRAPH_TEXT: &str = ".tiny{font-size:9px}.micro{font-size:8px}";
 
 /// The line draws itself, the area fades in after it. Reduced-motion viewers
 /// get the finished graph from the rule in `animation_css`.
-const GRAPH_ANIMATION: &str = ".draw{stroke-dasharray:1;animation:draw 1.1s cubic-bezier(.2,.8,.2,1) .15s both}@keyframes draw{from{stroke-dashoffset:1}}.sweep{animation:fade .8s ease-out .7s both}";
+const GRAPH_ANIMATION: &str = ".draw{stroke-dasharray:1;animation:draw 2.4s linear .2s both}@keyframes draw{from{stroke-dashoffset:1}}.dot{transform-box:fill-box;transform-origin:center;animation:pop .5s cubic-bezier(.2,.8,.2,1) both}@keyframes pop{from{opacity:0;transform:scale(0)}}.sweep{animation:fade 1.2s ease-out 1.4s both}";
+
+/// The line takes this long to draw (see `GRAPH_ANIMATION`), and each point
+/// appears when the line reaches it.
+const DRAW_MS: f64 = 2400.0;
+const DRAW_DELAY_MS: f64 = 200.0;
 
 /// A small card with a message, for requests that cannot be drawn.
 pub fn render_error(message: &str) -> String {
