@@ -1,13 +1,13 @@
-//! HTTP server: `GET /graph` returns the contribution graph as SVG, `GET /`
-//! serves a page that builds the URL from the parameters.
+//! HTTP server: `GET /graph` returns the contribution graph of a GitHub
+//! profile as SVG, `GET /` serves a page that builds the URL from the options.
 //!
 //! ```text
 //! REPOBEATS_TOKEN=ghp_... cargo run --features server --bin repobeats-server
-//! curl 'http://localhost:5100/graph?user=spatelpatidar&repo=repobeats&days=31&area=true'
+//! curl 'http://localhost:5100/graph?username=octocat&days=31&area=true'
 //! ```
 //!
 //! Environment: `PORT` (default 5100), `REPOBEATS_TOKEN` or `GITHUB_TOKEN`
-//! (strongly recommended: anonymous access allows 60 GitHub requests an hour),
+//! (required: GitHub's GraphQL API refuses anonymous requests),
 //! `GITHUB_API_URL`, `REPOBEATS_CACHE_SECONDS` (default 1800).
 
 use std::{
@@ -26,22 +26,26 @@ use axum::{
     response::{Html, IntoResponse, Response},
     routing::get,
 };
-use chrono::Utc;
+use chrono::{Duration as Days, NaiveDate, Utc};
 use repobeats::{
-    card::{CardOptions, CardSize, CardTheme, GraphOptions, render_graph, render_graph_error},
+    card::{
+        CardOptions, CardSize, CardTheme, GraphOptions, graph_dates, render_graph,
+        render_graph_error,
+    },
     collector::Collector,
-    domain::RepositoryName,
-    model::ActivitySnapshot,
+    domain::parse_username,
+    model::ContributionCalendar,
     params::{ParamError, invalid, parse_bool, parse_enum},
 };
 
 const PAGE: &str = include_str!("../web/index.html");
 const MAX_CACHE_ENTRIES: usize = 500;
-/// History is fetched in these sizes so `days=7` and `days=31` share one fetch.
-const LOOKBACK_BUCKETS: [i64; 4] = [31, 90, 180, 365];
+/// One request fetches this many days, so every `days`, `from` and `to`
+/// choice for a user is answered from the same cached calendar.
+const WINDOW_DAYS: i64 = 365;
 
-/// Snapshots by (lowercased repository, lookback days), with the time fetched.
-type Cache = HashMap<(String, i64), (Instant, Arc<ActivitySnapshot>)>;
+/// Calendars by lowercased username, with the day and time they were fetched.
+type Cache = HashMap<String, (Instant, NaiveDate, Arc<ContributionCalendar>)>;
 
 struct App {
     collector: Collector,
@@ -50,39 +54,37 @@ struct App {
 }
 
 impl App {
-    async fn snapshot(
+    async fn calendar(
         &self,
-        repository: &RepositoryName,
-        lookback: i64,
-    ) -> Result<Arc<ActivitySnapshot>> {
-        let bucket = LOOKBACK_BUCKETS
-            .into_iter()
-            .find(|bucket| *bucket >= lookback)
-            .unwrap_or(365);
-        let key = (repository.to_string().to_ascii_lowercase(), bucket);
-        if let Some((at, snapshot)) = self.cache.lock().unwrap().get(&key)
+        username: &str,
+        today: NaiveDate,
+    ) -> Result<Arc<ContributionCalendar>> {
+        let key = username.to_ascii_lowercase();
+        if let Some((at, day, calendar)) = self.cache.lock().unwrap().get(&key)
             && at.elapsed() < self.ttl
+            && *day == today
         {
-            return Ok(Arc::clone(snapshot));
+            return Ok(Arc::clone(calendar));
         }
-        let snapshot = Arc::new(self.collector.collect_days(repository, bucket).await?);
+        let from = today - Days::days(WINDOW_DAYS - 1);
+        let calendar = Arc::new(self.collector.contributions(username, from, today).await?);
         let mut cache = self.cache.lock().unwrap();
         if cache.len() >= MAX_CACHE_ENTRIES {
             let ttl = self.ttl;
-            cache.retain(|_, (at, _)| at.elapsed() < ttl);
+            cache.retain(|_, (at, _, _)| at.elapsed() < ttl);
             if cache.len() >= MAX_CACHE_ENTRIES {
                 cache.clear();
             }
         }
-        cache.insert(key, (Instant::now(), Arc::clone(&snapshot)));
-        Ok(snapshot)
+        cache.insert(key, (Instant::now(), today, Arc::clone(&calendar)));
+        Ok(calendar)
     }
 }
 
-/// Everything in the query string, split into the repository, the card
-/// options shared with the other cards, and the graph options.
+/// The query string, split into the username, the card options shared with
+/// the other cards, and the graph options.
 struct Request {
-    repository: RepositoryName,
+    username: String,
     card: CardOptions,
     graph: GraphOptions,
 }
@@ -100,16 +102,11 @@ fn parse_request(query: &str) -> Result<Request, ParamError> {
             .map(|(_, value)| value.as_str())
     };
 
-    let repo = get("repo").ok_or(ParamError::Missing("repo"))?;
-    let repository = if repo.contains('/') {
-        repo.parse()
-    } else {
-        let user = get("user")
-            .or_else(|| get("username"))
-            .ok_or(ParamError::Missing("user"))?;
-        RepositoryName::new(user, repo)
-    }
-    .map_err(|_| invalid("repo", repo, "use a name with `user`, or owner/name"))?;
+    let username = get("username")
+        .or_else(|| get("user"))
+        .ok_or(ParamError::Missing("username"))?;
+    let username = parse_username(username)
+        .map_err(|_| invalid("username", username, "use a GitHub username"))?;
 
     let mut card = CardOptions::default();
     if let Some(theme) = get("theme") {
@@ -126,7 +123,7 @@ fn parse_request(query: &str) -> Result<Request, ParamError> {
         card.animate = parse_bool("animate", animate)?;
     }
     Ok(Request {
-        repository,
+        username,
         card,
         graph: GraphOptions::from_pairs(pairs.iter().map(|(k, v)| (k.as_str(), v.as_str())))?,
     })
@@ -165,23 +162,29 @@ async fn graph(State(app): State<Arc<App>>, RawQuery(query): RawQuery) -> Respon
         Ok(request) => request,
         Err(error) => return failure(StatusCode::BAD_REQUEST, &error.to_string()),
     };
-    let lookback = request.graph.lookback_days(Utc::now().date_naive());
-    let snapshot = match app.snapshot(&request.repository, lookback).await {
-        Ok(snapshot) => snapshot,
+    let today = Utc::now().date_naive();
+    // Reject a bad date range before spending a GitHub request on it.
+    if let Err(error) = graph_dates(&request.graph, today) {
+        return failure(StatusCode::BAD_REQUEST, &error.to_string());
+    }
+    let calendar = match app.calendar(&request.username, today).await {
+        Ok(calendar) => calendar,
         Err(error) => {
             let message = format!("{error}");
             let status = if message.contains("404") {
                 StatusCode::NOT_FOUND
             } else if message.contains("403") {
                 StatusCode::TOO_MANY_REQUESTS
+            } else if message.contains("needs a GitHub token") {
+                StatusCode::SERVICE_UNAVAILABLE
             } else {
                 StatusCode::BAD_GATEWAY
             };
-            eprintln!("repobeats-server: {}: {error:#}", request.repository);
+            eprintln!("repobeats-server: {}: {error:#}", request.username);
             return failure(status, &message);
         }
     };
-    match render_graph(&snapshot, request.card, &request.graph) {
+    match render_graph(&calendar, today, request.card, &request.graph) {
         Ok(body) => svg(StatusCode::OK, "public, max-age=1800", body),
         Err(error) => failure(StatusCode::BAD_REQUEST, &error.to_string()),
     }
@@ -201,7 +204,9 @@ async fn main() -> Result<()> {
         .iter()
         .find_map(|name| env::var(name).ok().filter(|value| !value.trim().is_empty()));
     if token.is_none() {
-        eprintln!("repobeats-server: no token set, GitHub allows 60 requests/hour anonymously");
+        eprintln!(
+            "repobeats-server: no token set. The profile graph needs one: set REPOBEATS_TOKEN"
+        );
     }
     let api_url = env::var("GITHUB_API_URL").ok();
     let ttl = env::var("REPOBEATS_CACHE_SECONDS")

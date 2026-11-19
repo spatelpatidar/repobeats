@@ -1,16 +1,18 @@
 //! Options for the contribution graph card (`card: graph`, or `/graph` on the
-//! server).
+//! server). The graph is of a GitHub profile: the options say which days to
+//! show and how it looks, the user comes from `username`.
 //!
 //! | Parameter      | Meaning                                              | Default          |
 //! | -------------- | ---------------------------------------------------- | ---------------- |
 //! | `days`         | Days to plot, 1 to 365                               | `31`             |
 //! | `from`, `to`   | `YYYY-MM-DD` range, inclusive. Wins over `days`      |                  |
-//! | `metric`       | `contributions`, `pushes`, `issues`, `pulls`         | `contributions`  |
 //! | `area`         | Fill under the line                                  | `false`          |
 //! | `grid`         | Draw grid lines                                      | `true`           |
 //! | `smooth`       | Curve the line instead of straight segments          | `true`           |
 //! | `hide_title`   | Drop the title row                                   | `false`          |
 //! | `custom_title` | Replace the title                                    |                  |
+//! | `labels`       | x-axis labels: `auto`, `date`, `number`, `sideways`, `none` | `auto`     |
+//! | `hide_axis_titles` | Drop the "Days" and "Contributions" axis titles | `false`          |
 //! | `hide_border`  | No border                                            | `false`          |
 //! | `radius`       | Corner radius, 0 to 16 (clamped)                     | `0`              |
 //! | `height`       | Height in card units, 200 to 600 (clamped)           | `318`            |
@@ -19,10 +21,7 @@
 use chrono::NaiveDate;
 
 use super::colors::Rgb;
-use crate::{
-    model::DailyActivity,
-    params::{ParamError, invalid, parse_bool},
-};
+use crate::params::{ParamError, invalid, parse_bool};
 
 pub const DEFAULT_DAYS: u16 = 31;
 pub const MAX_DAYS: u16 = 365;
@@ -31,57 +30,34 @@ pub const MAX_HEIGHT: u32 = 600;
 pub const DEFAULT_HEIGHT: u32 = 318;
 pub const MAX_RADIUS: u32 = 16;
 
-/// What one point on the graph counts.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub enum GraphMetric {
-    /// Pushes + issues opened + pull requests opened, as in the activity card header.
+/// How the days are written under the x axis.
+///
+/// Every mode labels each day while there is room, and spaces the labels out
+/// when there is not, so they never overlap.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum LabelMode {
+    /// Picks by width: full dates, then day numbers, then smaller day
+    /// numbers, then dates written sideways, then spaced-out dates.
     #[default]
-    Contributions,
-    Pushes,
-    Issues,
-    PullRequests,
+    Auto,
+    /// Horizontal dates such as `Nov 9`.
+    Date,
+    /// The day of the month: `14`, `15`, `16`.
+    Number,
+    /// Dates written sideways, one under every day.
+    Sideways,
+    /// No labels under the axis.
+    None,
 }
 
-impl GraphMetric {
-    pub fn value(self, day: &DailyActivity) -> u32 {
-        match self {
-            Self::Contributions => day.contributions(),
-            Self::Pushes => day.pushes,
-            Self::Issues => day.issues_opened,
-            Self::PullRequests => day.pulls_opened,
-        }
-    }
-
-    pub(super) fn title(self) -> &'static str {
-        match self {
-            Self::Contributions => "Contribution Graph",
-            Self::Pushes => "Push Graph",
-            Self::Issues => "Issues Graph",
-            Self::PullRequests => "Pull Request Graph",
-        }
-    }
-
-    pub(super) fn unit(self, count: u32) -> &'static str {
-        match (self, count) {
-            (Self::Contributions, 1) => "contribution",
-            (Self::Contributions, _) => "contributions",
-            (Self::Pushes, 1) => "push",
-            (Self::Pushes, _) => "pushes",
-            (Self::Issues, 1) => "issue opened",
-            (Self::Issues, _) => "issues opened",
-            (Self::PullRequests, 1) => "pull request opened",
-            (Self::PullRequests, _) => "pull requests opened",
-        }
-    }
-
+impl LabelMode {
     fn parse(value: &str) -> Option<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
-            "contributions" | "contribution" | "all" => Some(Self::Contributions),
-            "pushes" | "push" | "commits" => Some(Self::Pushes),
-            "issues" | "issue" => Some(Self::Issues),
-            "pulls" | "pull" | "prs" | "pull-requests" | "pull_requests" => {
-                Some(Self::PullRequests)
-            }
+            "auto" => Some(Self::Auto),
+            "date" | "dates" => Some(Self::Date),
+            "number" | "numbers" | "day" | "days" => Some(Self::Number),
+            "sideways" | "rotated" | "vertical" => Some(Self::Sideways),
+            "none" | "off" | "hide" => Some(Self::None),
             _ => None,
         }
     }
@@ -117,11 +93,12 @@ pub struct GraphColors {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GraphOptions {
     pub range: GraphRange,
-    pub metric: GraphMetric,
     pub area: bool,
     pub grid: bool,
     pub smooth: bool,
     pub hide_title: bool,
+    pub labels: LabelMode,
+    pub hide_axis_titles: bool,
     pub hide_border: bool,
     pub title: Option<String>,
     pub radius: u32,
@@ -133,11 +110,12 @@ impl Default for GraphOptions {
     fn default() -> Self {
         Self {
             range: GraphRange::Last(DEFAULT_DAYS),
-            metric: GraphMetric::default(),
             area: false,
             grid: true,
             smooth: true,
             hide_title: false,
+            labels: LabelMode::Auto,
+            hide_axis_titles: false,
             hide_border: false,
             title: None,
             radius: 0,
@@ -148,14 +126,6 @@ impl Default for GraphOptions {
 }
 
 impl GraphOptions {
-    /// How many days back from `today` the range reaches, counting `today`.
-    pub fn lookback_days(&self, today: NaiveDate) -> i64 {
-        match self.range {
-            GraphRange::Last(days) => i64::from(days),
-            GraphRange::Between { from, .. } => (today - from).num_days() + 1,
-        }
-    }
-
     /// Reads a URL query string such as `days=14&area=true&line=58a6ff`.
     pub fn from_query(query: &str) -> Result<Self, ParamError> {
         Self::from_pairs(form_urlencoded::parse(query.as_bytes()))
@@ -196,19 +166,18 @@ impl GraphOptions {
                 }
                 "from" => from = Some(date("from", value)?),
                 "to" => to = Some(date("to", value)?),
-                "metric" => {
-                    options.metric = GraphMetric::parse(value).ok_or_else(|| {
-                        invalid(
-                            "metric",
-                            value,
-                            "use contributions, pushes, issues or pulls",
-                        )
-                    })?;
-                }
                 "area" => options.area = parse_bool("area", value)?,
                 "grid" => options.grid = parse_bool("grid", value)?,
                 "smooth" => options.smooth = parse_bool("smooth", value)?,
                 "hide_title" => options.hide_title = parse_bool("hide_title", value)?,
+                "labels" => {
+                    options.labels = LabelMode::parse(value).ok_or_else(|| {
+                        invalid("labels", value, "use auto, date, number, sideways or none")
+                    })?;
+                }
+                "hide_axis_titles" => {
+                    options.hide_axis_titles = parse_bool("hide_axis_titles", value)?;
+                }
                 "hide_border" => options.hide_border = parse_bool("hide_border", value)?,
                 "custom_title" => options.title = Some(value.to_owned()),
                 "radius" => {

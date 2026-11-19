@@ -78,6 +78,13 @@ pub enum RepositoryNameError {
     Name,
 }
 
+/// Checks a GitHub username and returns it trimmed.
+pub fn parse_username(value: &str) -> Result<String, RepositoryNameError> {
+    let value = value.trim();
+    validate_owner(value)?;
+    Ok(value.to_owned())
+}
+
 fn validate_owner(owner: &str) -> Result<(), RepositoryNameError> {
     if owner.is_empty()
         || owner.len() > 39

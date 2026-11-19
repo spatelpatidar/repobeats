@@ -263,3 +263,44 @@ impl RepoOverview {
         }
     }
 }
+
+/// A user's contribution calendar: one count per day, the same numbers as the
+/// green squares on their profile (commits, issues, pull requests, reviews).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContributionCalendar {
+    pub login: String,
+    /// Display name, when the user has set one.
+    pub name: Option<String>,
+    /// Oldest first, one entry per day.
+    pub days: Vec<(NaiveDate, u32)>,
+}
+
+impl ContributionCalendar {
+    /// Reads the `data` of the `contributionCalendar` GraphQL query, which is
+    /// what octocrab hands back. `None` when the user does not exist or the
+    /// shape is unexpected.
+    pub fn from_graphql(data: &Value) -> Option<Self> {
+        let user = &data["user"];
+        if user.is_null() {
+            return None;
+        }
+        let login = user["login"].as_str()?.to_owned();
+        let name = user["name"]
+            .as_str()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(str::to_owned);
+        let weeks = user["contributionsCollection"]["contributionCalendar"]["weeks"].as_array()?;
+        let mut days = Vec::new();
+        for week in weeks {
+            for day in week["contributionDays"].as_array()? {
+                let date = NaiveDate::parse_from_str(day["date"].as_str()?, "%Y-%m-%d").ok()?;
+                let count = u32::try_from(day["contributionCount"].as_u64()?).unwrap_or(u32::MAX);
+                days.push((date, count));
+            }
+        }
+        days.sort_by_key(|(date, _)| *date);
+        days.dedup_by_key(|(date, _)| *date);
+        Some(Self { login, name, days })
+    }
+}

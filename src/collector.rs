@@ -6,7 +6,7 @@
 //! App or server is involved, and nothing is sent anywhere except api.github.com.
 
 use anyhow::{Context, Result, bail};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use octocrab::{
     Octocrab, Page,
     models::{issues::Issue, repos::RepoCommit},
@@ -19,14 +19,15 @@ use serde_json::Value;
 use crate::{
     domain::RepositoryName,
     model::{
-        ActivitySnapshot, COLLECTION_DAYS, EventKind, LanguageBreakdown, RepoOverview,
-        RepositoryEvent, parse_languages,
+        ActivitySnapshot, COLLECTION_DAYS, ContributionCalendar, EventKind, LanguageBreakdown,
+        RepoOverview, RepositoryEvent, parse_languages,
     },
 };
 
 pub struct Collector {
     client: Octocrab,
     max_pages: u32,
+    authenticated: bool,
 }
 
 impl Collector {
@@ -35,6 +36,7 @@ impl Collector {
     /// `api_url` overrides https://api.github.com (GitHub Enterprise Server).
     pub fn new(token: Option<&str>, api_url: Option<&str>, max_pages: u32) -> Result<Self> {
         let mut builder = Octocrab::builder();
+        let authenticated = token.is_some_and(|token| !token.trim().is_empty());
         if let Some(url) = api_url.map(str::trim).filter(|url| !url.is_empty()) {
             builder = builder.base_uri(url).context("invalid GITHUB_API_URL")?;
         }
@@ -44,23 +46,13 @@ impl Collector {
         Ok(Self {
             client: builder.build().context("failed to build GitHub client")?,
             max_pages,
+            authenticated,
         })
     }
 
     pub async fn collect(&self, repository: &RepositoryName) -> Result<ActivitySnapshot> {
-        self.collect_days(repository, COLLECTION_DAYS).await
-    }
-
-    /// Like [`Collector::collect`] but reads only the last `days` days, so a
-    /// 31-day graph does not page through two years of history. Days older
-    /// than that are left empty in the snapshot.
-    pub async fn collect_days(
-        &self,
-        repository: &RepositoryName,
-        days: i64,
-    ) -> Result<ActivitySnapshot> {
         let now = Utc::now();
-        let since = now - Duration::days(days.clamp(1, COLLECTION_DAYS));
+        let since = now - Duration::days(COLLECTION_DAYS);
         let (commits, issues) = tokio::try_join!(
             self.commits(repository, since, now),
             self.issues(repository, since),
@@ -121,6 +113,57 @@ impl Collector {
             now,
             &events,
         ))
+    }
+
+    /// One GraphQL request: the contribution calendar of `username` from
+    /// `from` to `to` (UTC, inclusive, at most a year apart). This is the
+    /// calendar on the user's profile, public contributions only unless the
+    /// token belongs to that user. GraphQL refuses anonymous requests.
+    pub async fn contributions(
+        &self,
+        username: &str,
+        from: NaiveDate,
+        to: NaiveDate,
+    ) -> Result<ContributionCalendar> {
+        if !self.authenticated {
+            bail!(
+                "the profile graph needs a GitHub token (REPOBEATS_TOKEN or GITHUB_TOKEN): GitHub's GraphQL API refuses anonymous requests"
+            );
+        }
+        const QUERY: &str = "query($login:String!,$from:DateTime!,$to:DateTime!){user(login:$login){login name contributionsCollection(from:$from,to:$to){contributionCalendar{weeks{contributionDays{date contributionCount}}}}}}";
+        let payload = serde_json::json!({
+            "query": QUERY,
+            "variables": {
+                "login": username,
+                "from": format!("{from}T00:00:00Z"),
+                "to": format!("{to}T23:59:59Z"),
+            },
+        });
+        // octocrab returns the `data` part, and turns GraphQL errors into `Err`.
+        let data: Value = match self.client.graphql(&payload).await {
+            Ok(data) => data,
+            Err(octocrab::Error::Graphql { source, .. }) => {
+                let message = source
+                    .0
+                    .first()
+                    .map_or_else(String::new, |error| error.message.clone());
+                if message.contains("Could not resolve to a User") {
+                    bail!(
+                        "GitHub returned 404 for contributions: user `{username}` does not exist"
+                    );
+                }
+                if message.to_ascii_lowercase().contains("rate limit") {
+                    bail!("GitHub refused the contributions request (403): rate limit hit");
+                }
+                bail!("GitHub GraphQL error: {message}");
+            }
+            Err(error) => {
+                let hint = request_hint("contributions", &error);
+                return Err(anyhow::Error::new(error).context(hint));
+            }
+        };
+        ContributionCalendar::from_graphql(&data)
+            .context("GitHub sent a contribution calendar in an unexpected shape")
     }
 
     /// One request: bytes of code per language.
