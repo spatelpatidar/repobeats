@@ -53,7 +53,7 @@ Add a step to a workflow. It has the same shape as `lowlighter/metrics`:
 - uses: actions/checkout@v4
 
 - name: Repobeats - respondo-grpc
-  uses: spatelpatidar/repobeats@v0.4.0
+  uses: spatelpatidar/repobeats@v0.3.0
   continue-on-error: true
   timeout-minutes: 10
   with:
@@ -87,7 +87,7 @@ Then embed the file:
 | `animate` | `true` | `false` writes a static card. See [Animation](#animation). |
 | `size` | `medium` | Width: `small` (610px), `medium` (814px), `large` (1221px). Height follows the card. |
 | `period` | `30` | `7`, `14`, `30`, `90`, `180` or `365` days. Used by `activity` and `contributors`. |
-| `graph_options` | empty | Only for `card: graph`. A query string such as `days=31&area=true`. See [Contribution graph](#contribution-graph). |
+| `graph_options` | empty | Only for `card: graph` (set `user`, no `repo`). A query string such as `days=31&area=true`. See [Contribution graph](#contribution-graph). |
 | `filename` | `repobeats.svg` | Path relative to the workspace. Parent folders are created. |
 | `max_pages` | `50` | API pages (100 items each) read per list. Raise it for very busy repositories. |
 | `output_action` | `none` | `none` or `commit`. |
@@ -106,7 +106,7 @@ Then embed the file:
 | `[4]` | tertiary, optional | The Pushes series. When omitted it is the primary color with its hue turned 120 degrees. |
 
 ```yaml
-- uses: spatelpatidar/repobeats@v0.4.0
+- uses: spatelpatidar/repobeats@v0.3.0
   with:
     repo: spatelpatidar/respondo-grpc
     colors: "0b1020,ff4d8d,4dd2ff,eef1ff,ffd166"   # bg, primary, secondary, text, tertiary
@@ -144,38 +144,40 @@ Viewers who turn on "reduce motion" in their system settings see the finished ca
 | `contributors` | Up to 10 contributors for the period, with a bar and share per person. | Same as `activity`. |
 | `languages` | Stacked bar and legend of the 8 largest languages, the rest grouped as "Other". | 1 |
 | `overview` | Stars, forks, open issues, watchers, license, main language, last push, latest release, description. | 2 |
-| `graph` | Line graph of daily contributions over 1 to 365 days or a date range. See [Contribution graph](#contribution-graph). | Commits and issues, only as many days as the graph needs. |
+| `graph` | Line graph of a GitHub profile's daily contributions over 1 to 365 days or a date range. See [Contribution graph](#contribution-graph). | One GraphQL request for the user (needs a token). |
 
 `languages` and `overview` are cheap and work well without a token on a single public repository. `activity` and `contributors` read two years of history, so on busy repositories pass a token and raise `max_pages` if the step reports a pagination error.
 
 ## Contribution graph
 
-`card: graph` draws a line graph of daily activity, in the style of [github-readme-activity-graph](https://github.com/Ashutosh00710/github-readme-activity-graph). One point is one day, counted as pushes + issues opened + pull requests opened (change it with `metric`). Unlike that project, which graphs a user's profile, this graphs one repository.
+`card: graph` draws the contribution graph of a **GitHub profile**, in the style of [github-readme-activity-graph](https://github.com/Ashutosh00710/github-readme-activity-graph). One point is one day, and its value is the number on that day of the user's contribution calendar (commits, issues, pull requests and reviews, the same numbers as the green squares on their profile). It needs only a username, not a repository.
 
-In a workflow, put the options in `graph_options` as a query string:
+In a workflow, set `user` and put the options in `graph_options` as a query string. It needs a token, see [Tokens](#tokens).
 
 ```yaml
 - uses: spatelpatidar/repobeats@main
   with:
     card: graph
-    repo: spatelpatidar/repobeats
+    user: spatelpatidar
     theme: dracula
     graph_options: days=31&area=true&line=ff79c6&point=ffb86c
+    token: ${{ secrets.GITHUB_TOKEN }}
     filename: graph.svg
 ```
 
-Or serve it over HTTP and embed a URL, see [Graph server](#graph-server).
+If `user` is empty, the owner of the repository the workflow runs in is used. Only public contributions are counted, unless the token belongs to that user and they allow private ones on their profile. Or serve it over HTTP and embed a URL, see [Graph server](#graph-server).
 
 | Parameter | Default | Notes |
 | --- | --- | --- |
-| `days` | `31` | Whole number, 1 to 365. |
+| `days` | `31` | Whole number, 1 to 365, ending today (UTC). |
 | `from`, `to` | | `YYYY-MM-DD`, inclusive, both required. Replace `days`. Must fall inside the last 365 days. |
-| `metric` | `contributions` | `contributions`, `pushes`, `issues` or `pulls` (issues and pull requests are counted when opened). |
 | `area` | `false` | Fill under the line. |
 | `grid` | `true` | Grid lines. The zero line stays. |
 | `smooth` | `true` | Curved line. `false` gives straight segments. |
 | `hide_title` | `false` | Remove the title row. |
-| `custom_title` | `owner/name Contribution Graph` | Up to 64 characters, longer is cut. |
+| `custom_title` | `Name's Contribution Graph` | Up to 64 characters, longer is cut. The name is the profile name, else the username. |
+| `labels` | `auto` | How days are written under the x axis: `auto` (by width), `date` (`Nov 9`), `number` (`14`, `15`), `sideways` (dates written sideways, one under every day) or `none`. Each style labels every day while there is room and spaces the labels out when there is not. |
+| `hide_axis_titles` | `false` | Remove the "Days" and "Contributions" axis titles. |
 | `hide_border` | `false` | No border. |
 | `radius` | `0` | Corner radius, 0 to 16 (larger values are set to 16). |
 | `height` | `318` | 200 to 600 (out-of-range values are clamped). The width follows `size`. |
@@ -186,33 +188,33 @@ Booleans accept `true`/`false`, `on`/`off`, `yes`/`no`, `1`/`0`. Invalid values 
 
 The graph also takes the usual `theme`, `size` and `animate` options (on the server they are query parameters too). The `colors` list is not used by this card: use the per-part parameters above.
 
-Names differ from github-readme-activity-graph where this project already had a convention: its `username` is `user` plus `repo` here, and `theme` names are this project's (`light`, `dark`, `github-dimmed`, `dracula`, `nord`, `tokyo-night`, `solarized-light`).
+Parameter names follow github-readme-activity-graph where they exist (`username`, `days`, `custom_title`, `hide_title`, `hide_axis_titles`, `hide_border`, `bg_color`, `color`, `line`, `point`, `area_color`, `area`, `radius`, `height`). Themes are this project's: `light`, `dark`, `github-dimmed`, `dracula`, `nord`, `tokyo-night`, `solarized-light`.
 
 ## Graph server
 
 A small HTTP server returns the graph for a URL, and serves a page that builds the URL for you. It is optional and not part of the Action image.
 
 ```bash
-GITHUB_TOKEN=ghp_xxx cargo run --release --features server --bin repobeats-server
+REPOBEATS_TOKEN=ghp_xxx cargo run --release --features server --bin repobeats-server
 # open http://localhost:5100
-curl 'http://localhost:5100/graph?user=spatelpatidar&repo=repobeats&days=31&area=true&theme=dark'
+curl 'http://localhost:5100/graph?username=spatelpatidar&days=31&area=true&theme=dark'
 ```
 
 Then embed it:
 
 ```md
-![Contribution graph](https://your-host/graph?user=spatelpatidar&repo=repobeats&days=31&area=true)
+![Contribution graph](https://your-host/graph?username=spatelpatidar&days=31&area=true)
 ```
 
 | Route | Returns |
 | --- | --- |
 | `GET /` | The page: a form for every parameter, a live preview, and Markdown/HTML/URL to copy. |
-| `GET /graph` | The SVG. Needs `repo` and `user` (or `repo=owner/name`), plus any [graph parameters](#contribution-graph), `theme`, `size` and `animate`. |
+| `GET /graph` | The SVG. Needs `username` (`user` also works), plus any [graph parameters](#contribution-graph), `theme`, `size` and `animate`. |
 | `GET /healthz` | `ok`. |
 
-Errors are also SVG cards, with a status code: `400` for a bad parameter, `404` unknown or private repository, `429` GitHub rate limit, `502` other GitHub failures. Successful responses are cached for 30 minutes (`Cache-Control: public, max-age=1800`).
+Errors are also SVG cards, with a status code: `400` for a bad parameter, `404` unknown user, `429` GitHub rate limit, `503` no token set on the server, `502` other GitHub failures. Successful responses are cached for 30 minutes (`Cache-Control: public, max-age=1800`). One GitHub request fetches a whole year for a user, so every `days` or `from`/`to` choice for that user is answered from the same cached data.
 
-Settings, all environment variables: `PORT` (5100), `REPOBEATS_TOKEN` or `GITHUB_TOKEN`, `GITHUB_API_URL`, `REPOBEATS_CACHE_SECONDS` (1800). Set a token: without one GitHub allows 60 requests an hour for the whole server, which a few visitors will use up. The token can read whatever it can access, and the server will draw any repository that token can see, so do not give a server a token with access to private repositories unless you want those graphs public. A `Dockerfile.server` is included.
+Settings, all environment variables: `PORT` (5100), `REPOBEATS_TOKEN` or `GITHUB_TOKEN` (required), `GITHUB_API_URL`, `REPOBEATS_CACHE_SECONDS` (1800). GitHub's GraphQL API refuses anonymous requests, so the server needs a token. A token with no extra permissions reads public profiles. The server will draw the public contributions of any username that visitors enter, using your token's rate limit (5,000 points an hour). A `Dockerfile.server` is included.
 
 ## Tokens
 
@@ -220,6 +222,7 @@ Settings, all environment variables: `PORT` (5100), `REPOBEATS_TOKEN` or `GITHUB
 | --- | --- |
 | Public repository | None needed, but anonymous requests are limited to 60 per hour per IP address. Pass `secrets.GITHUB_TOKEN` to avoid that. |
 | The repository running the workflow, public or private | `${{ secrets.GITHUB_TOKEN }}` is enough. |
+| Profile graph (`card: graph`) | Always required, GitHub's GraphQL API refuses anonymous requests. `${{ secrets.GITHUB_TOKEN }}` or a personal access token with no extra permissions reads public contributions. |
 | A different private repository | A personal access token stored as a repository secret. Fine-grained: read-only access to **Contents**, **Issues**, **Pull requests** and **Metadata** on that one repository. Classic: `repo` scope. |
 
 The token is passed to the Action through an environment variable and only used for `GET` requests.

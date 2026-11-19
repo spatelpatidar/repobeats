@@ -5,7 +5,7 @@
 //! Everything dynamic is either a number, a date, a validated color or text
 //! that goes through `text`, which escapes it.
 
-use std::fmt::Write as _;
+use std::{collections::HashMap, fmt::Write as _};
 
 use chrono::{Datelike, Duration, NaiveDate};
 use svg::{
@@ -19,25 +19,44 @@ use thiserror::Error;
 
 use super::{CardOptions, Palette, color_comment, extra::ellipsize, style, wave};
 use crate::{
-    card::graph_options::{Background, GraphColors, GraphOptions, GraphRange},
-    model::ActivitySnapshot,
+    card::graph_options::{Background, GraphColors, GraphOptions, GraphRange, LabelMode},
+    model::ContributionCalendar,
 };
 
 const WIDTH: f64 = 814.0;
+/// Left edge of the plot, without and with the vertical axis title.
 const LEFT: f64 = 52.0;
+const LEFT_TITLED: f64 = 66.0;
 const RIGHT: f64 = WIDTH - 24.0;
 const BOTTOM_PAD: f64 = 40.0;
+/// Extra room under the date labels for the horizontal axis title.
+const X_TITLE_PAD: f64 = 18.0;
+/// Room under the plot when there are no date labels.
+const NO_LABEL_PAD: f64 = 14.0;
+/// Space one label needs along the axis, in each style, when labels must be spaced out.
+const NUMBER_SPACING: f64 = 14.0;
+const SIDEWAYS_SPACING: f64 = 9.0;
+/// Room under the plot for dates written sideways.
+const ROTATED_PAD: f64 = 62.0;
 const TITLE_TOP: f64 = 62.0;
 const NO_TITLE_TOP: f64 = 28.0;
-/// Points are drawn up to this many days; beyond it the line is enough.
-const MAX_POINTS: usize = 60;
+/// Width of one day on the axis (card units) and what is written under it.
+/// Wide slots get a full date ("Nov 9"), then the day of the month, then the
+/// day of the month in smaller type, then the date written sideways. Below
+/// `ROTATED_MIN_SLOT` one label per day cannot fit, and every few days get one.
+const FULL_DATE_SLOT: f64 = 50.0;
+const DAY_NUMBER_SLOT: f64 = 21.0;
+const SMALL_NUMBER_SLOT: f64 = 12.0;
+const ROTATED_MIN_SLOT: f64 = 7.5;
+/// A vertical grid line for every day, and a point for every day, down to
+/// these widths. Beyond that the grid follows the labels and the line has no points.
+const GRID_MIN_SLOT: f64 = 5.0;
+const POINT_MIN_SLOT: f64 = 6.0;
 /// Longest custom title, in characters.
 const TITLE_LIMIT: usize = 64;
 
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
 pub enum GraphError {
-    #[error("the snapshot has no data for the last {0} days")]
-    NotEnoughHistory(usize),
     #[error("dates must fall between {earliest} and {latest}")]
     OutsideWindow {
         earliest: NaiveDate,
@@ -81,12 +100,15 @@ impl Colors {
     }
 }
 
+/// Draws the contribution graph of `calendar`. `today` (UTC) is the last day
+/// of a `days=N` range.
 pub fn render_graph(
-    snapshot: &ActivitySnapshot,
+    calendar: &ContributionCalendar,
+    today: NaiveDate,
     card: CardOptions,
     graph: &GraphOptions,
 ) -> Result<String, GraphError> {
-    let days = select(snapshot, graph)?;
+    let days = select(calendar, today, graph)?;
     let palette = Palette::resolve(&card);
     let colors = Colors::resolve(&palette, &graph.colors, graph.hide_border);
 
@@ -96,17 +118,35 @@ pub fn render_graph(
     } else {
         TITLE_TOP
     };
-    let plot_bottom = height - BOTTOM_PAD;
+    let count = days.len();
+    let titled = !graph.hide_axis_titles;
+    let left = if titled { LEFT_TITLED } else { LEFT };
+    // Width of one day, which decides how the date axis is written.
+    let slot = if count > 1 {
+        (RIGHT - left) / (count - 1) as f64
+    } else {
+        RIGHT - left
+    };
+    let sideways = match graph.labels {
+        LabelMode::Auto => (ROTATED_MIN_SLOT..SMALL_NUMBER_SLOT).contains(&slot),
+        LabelMode::Sideways => true,
+        _ => false,
+    };
+    let label_pad = match graph.labels {
+        LabelMode::None => NO_LABEL_PAD,
+        _ if sideways => ROTATED_PAD,
+        _ => BOTTOM_PAD,
+    };
+    let plot_bottom = height - label_pad - if titled { X_TITLE_PAD } else { 0.0 };
     let plot_height = plot_bottom - plot_top;
     let max = days.iter().map(|(_, value)| *value).max().unwrap_or(0);
     let (step, top) = nice_scale(max);
-    let count = days.len();
 
     let x_at = |index: usize| {
         if count == 1 {
-            (LEFT + RIGHT) / 2.0
+            (left + RIGHT) / 2.0
         } else {
-            LEFT + (RIGHT - LEFT) * index as f64 / (count - 1) as f64
+            left + (RIGHT - left) * index as f64 / (count - 1) as f64
         }
     };
     let y_at = |value: u32| plot_bottom - plot_height * f64::from(value) / f64::from(top);
@@ -127,7 +167,10 @@ pub fn render_graph(
         let total: u32 = days.iter().map(|(_, value)| value).sum();
         let title = match &graph.title {
             Some(title) => ellipsize(title, TITLE_LIMIT),
-            None => format!("{} {}", snapshot.repository, graph.metric.title()),
+            None => format!(
+                "{}'s Contribution Graph",
+                calendar.name.as_deref().unwrap_or(&calendar.login)
+            ),
         };
         text(
             &mut body,
@@ -139,7 +182,11 @@ pub fn render_graph(
         );
         let summary = format!(
             "{total} {} · {} – {}",
-            graph.metric.unit(total),
+            if total == 1 {
+                "contribution"
+            } else {
+                "contributions"
+            },
             short_date(days[0].0, false),
             short_date(days[count - 1].0, false),
         );
@@ -161,7 +208,7 @@ pub fn render_graph(
         if graph.grid || tick == 0 {
             let _ = write!(
                 body,
-                r#"<line x1="{LEFT}" y1="{y:.1}" x2="{RIGHT}" y2="{y:.1}" stroke="{}" stroke-opacity="{}" stroke-width="1"/>"#,
+                r#"<line x1="{left}" y1="{y:.1}" x2="{RIGHT}" y2="{y:.1}" stroke="{}" stroke-opacity="{}" stroke-width="1"/>"#,
                 colors.text,
                 if tick == 0 { 0.4 } else { 0.15 },
             );
@@ -169,44 +216,107 @@ pub fn render_graph(
         text(
             &mut body,
             Anchor::End,
-            (LEFT - 10.0, y + 4.0),
+            (left - 10.0, y + 4.0),
             "sans smaller",
             &colors.text,
             &value.to_string(),
         );
     }
 
-    // Date axis: label the latest day and every `stride` days before it.
+    // Date axis: a vertical grid line and a label for every day while they
+    // fit. Longer ranges label the latest day and every `stride` days before it.
     let multi_year = days[0].0.year() != days[count - 1].0.year();
-    let spacing = if multi_year { 78.0 } else { 56.0 };
-    let slot = if count > 1 {
-        (RIGHT - LEFT) / (count - 1) as f64
+    let spaced = |spacing: f64| (spacing / slot).ceil().max(1.0) as usize;
+    let date_spacing = if multi_year { 78.0 } else { 56.0 };
+    let number_class = if slot >= DAY_NUMBER_SLOT {
+        "sans smaller"
     } else {
-        RIGHT - LEFT
+        "sans tiny"
     };
-    let stride = (spacing / slot).ceil().max(1.0) as usize;
-    let mut index = count - 1;
-    loop {
-        let x = x_at(index);
-        if graph.grid && count > 1 {
+    let (stride, style_of): (usize, LabelStyle) = match graph.labels {
+        LabelMode::Auto => {
+            if slot >= FULL_DATE_SLOT {
+                (1, LabelStyle::Date)
+            } else if slot >= DAY_NUMBER_SLOT {
+                (1, LabelStyle::Number("sans smaller"))
+            } else if slot >= SMALL_NUMBER_SLOT {
+                (1, LabelStyle::Number("sans tiny"))
+            } else if sideways {
+                (1, LabelStyle::Sideways)
+            } else {
+                (spaced(date_spacing), LabelStyle::Date)
+            }
+        }
+        LabelMode::Date => (spaced(date_spacing), LabelStyle::Date),
+        LabelMode::Number => (spaced(NUMBER_SPACING), LabelStyle::Number(number_class)),
+        LabelMode::Sideways => (spaced(SIDEWAYS_SPACING), LabelStyle::Sideways),
+        LabelMode::None => (spaced(date_spacing), LabelStyle::None),
+    };
+    if graph.grid && count > 1 {
+        let (every, opacity) = if slot >= GRID_MIN_SLOT {
+            (1, if slot >= SMALL_NUMBER_SLOT { 0.15 } else { 0.1 })
+        } else {
+            (stride, 0.15)
+        };
+        for index in (0..count).rev().step_by(every) {
+            let x = x_at(index);
             let _ = write!(
                 body,
-                r#"<line x1="{x:.1}" y1="{plot_top}" x2="{x:.1}" y2="{plot_bottom}" stroke="{}" stroke-opacity="0.15" stroke-width="1"/>"#,
+                r#"<line class="vgrid" x1="{x:.1}" y1="{plot_top}" x2="{x:.1}" y2="{plot_bottom}" stroke="{}" stroke-opacity="{opacity}" stroke-width="1"/>"#,
                 colors.text
             );
         }
+    }
+    for index in (0..count).rev().step_by(stride) {
+        let x = x_at(index);
+        let date = days[index].0;
+        match style_of {
+            LabelStyle::Date => text(
+                &mut body,
+                Anchor::Middle,
+                (x, plot_bottom + 22.0),
+                "sans smaller",
+                &colors.text,
+                &short_date(date, multi_year),
+            ),
+            LabelStyle::Number(class) => text(
+                &mut body,
+                Anchor::Middle,
+                (x, plot_bottom + 22.0),
+                class,
+                &colors.text,
+                &date.day().to_string(),
+            ),
+            LabelStyle::None => {}
+            LabelStyle::Sideways => sideways_text(
+                &mut body,
+                (x, plot_bottom + 8.0),
+                &colors.text,
+                &short_date(date, multi_year),
+            ),
+        }
+    }
+
+    // Axis titles: "Days" centered under the date labels, "Contributions"
+    // turned sideways along the value axis.
+    if titled {
         text(
             &mut body,
             Anchor::Middle,
-            (x, plot_bottom + 22.0),
-            "sans smaller",
+            ((left + RIGHT) / 2.0, height - 12.0),
+            "sans smaller bold",
             &colors.text,
-            &short_date(days[index].0, multi_year),
+            "Days",
         );
-        match index.checked_sub(stride) {
-            Some(next) => index = next,
-            None => break,
-        }
+        let middle = plot_top + plot_height / 2.0;
+        let node = Text::new("Contributions")
+            .set("x", "16.0")
+            .set("y", format!("{middle:.1}"))
+            .set("class", "sans smaller bold")
+            .set("fill", colors.text.as_str())
+            .set("text-anchor", "middle")
+            .set("transform", format!("rotate(-90 16.0 {middle:.1})"));
+        body.push_str(&node.to_string());
     }
 
     // Area, line, points.
@@ -234,11 +344,13 @@ pub fn render_graph(
             colors.line
         );
     }
-    if count <= MAX_POINTS {
+    if slot >= POINT_MIN_SLOT {
+        let radius = (slot * 0.38).clamp(1.6, 3.5);
+        let ring = if radius < 3.0 { 0.8 } else { 1.5 };
         for (index, ((date, value), (x, y))) in days.iter().zip(&points).enumerate() {
             let _ = write!(
                 body,
-                r#"<circle class="cell w{}" cx="{x:.1}" cy="{y:.1}" r="3.5" fill="{}" stroke="{}" stroke-width="1.5"><title>{}: {value}</title></circle>"#,
+                r#"<circle class="cell w{}" cx="{x:.1}" cy="{y:.1}" r="{radius:.1}" fill="{}" stroke="{}" stroke-width="{ring}"><title>{}: {value}</title></circle>"#,
                 wave(index, count),
                 colors.point,
                 if colors.background == "transparent" {
@@ -254,6 +366,7 @@ pub fn render_graph(
     let (pixel_width, _) = card.size.dimensions();
     let pixel_height = (f64::from(pixel_width) * height / WIDTH).round() as u32;
     let mut css = style(card.animate);
+    css.push_str(GRAPH_TEXT);
     if card.animate {
         css.push_str(GRAPH_ANIMATION);
     }
@@ -277,6 +390,9 @@ pub fn render_graph(
         .add(Blob::new(body))
         .to_string())
 }
+
+/// Smaller type for axes that label many days.
+const GRAPH_TEXT: &str = ".tiny{font-size:9px}.micro{font-size:8px}";
 
 /// The line draws itself, the area fades in after it. Reduced-motion viewers
 /// get the finished graph from the rule in `animation_css`.
@@ -321,39 +437,45 @@ pub fn render_error(message: &str) -> String {
         .to_string()
 }
 
-/// `(date, value)` for every day of the requested range, oldest first.
+/// How many days of history a profile graph can show, counting today.
+pub const WINDOW_DAYS: i64 = 365;
+
+/// First and last day of the range, checked against the 365-day window that
+/// ends `today`.
+pub fn graph_dates(
+    graph: &GraphOptions,
+    today: NaiveDate,
+) -> Result<(NaiveDate, NaiveDate), GraphError> {
+    let earliest = today - Duration::days(WINDOW_DAYS - 1);
+    match graph.range {
+        GraphRange::Last(days) => Ok((today - Duration::days(i64::from(days) - 1), today)),
+        GraphRange::Between { from, to } => {
+            if from < earliest || to > today {
+                Err(GraphError::OutsideWindow {
+                    earliest,
+                    latest: today,
+                })
+            } else {
+                Ok((from, to))
+            }
+        }
+    }
+}
+
+/// `(date, count)` for every day of the requested range, oldest first. Days
+/// the calendar does not list count as zero.
 fn select(
-    snapshot: &ActivitySnapshot,
+    calendar: &ContributionCalendar,
+    today: NaiveDate,
     graph: &GraphOptions,
 ) -> Result<Vec<(NaiveDate, u32)>, GraphError> {
-    let available = snapshot.current.len();
-    let latest = snapshot.generated_at.date_naive();
-    let earliest = latest - Duration::days(available.saturating_sub(1) as i64);
-    let (from, to) = match graph.range {
-        GraphRange::Last(days) => {
-            let days = usize::from(days);
-            if days > available {
-                return Err(GraphError::NotEnoughHistory(days));
-            }
-            (latest - Duration::days(days as i64 - 1), latest)
-        }
-        GraphRange::Between { from, to } => {
-            if available == 0 || from < earliest || to > latest {
-                return Err(GraphError::OutsideWindow { earliest, latest });
-            }
-            (from, to)
-        }
-    };
-    let start = (from - earliest).num_days() as usize;
-    let length = (to - from).num_days() as usize + 1;
-    Ok(snapshot.current[start..start + length]
-        .iter()
-        .enumerate()
-        .map(|(offset, day)| {
-            (
-                from + Duration::days(offset as i64),
-                graph.metric.value(day),
-            )
+    let (from, to) = graph_dates(graph, today)?;
+    let counts = calendar.days.iter().copied().collect::<HashMap<_, _>>();
+    let length = (to - from).num_days();
+    Ok((0..=length)
+        .map(|offset| {
+            let date = from + Duration::days(offset);
+            (date, counts.get(&date).copied().unwrap_or(0))
         })
         .collect())
 }
@@ -443,6 +565,29 @@ fn smooth_path(points: &[(f64, f64)]) -> String {
         );
     }
     path
+}
+
+/// How the label of each day on the date axis is written.
+#[derive(Clone, Copy)]
+enum LabelStyle {
+    None,
+    Date,
+    Number(&'static str),
+    Sideways,
+}
+
+/// A date written bottom to top, hanging below the axis with its end at `(x, y)`.
+fn sideways_text(svg: &mut String, (x, y): (f64, f64), fill: &str, content: &str) {
+    // The baseline sits a little right of the day, so the glyphs are centered on it.
+    let x = x + 3.0;
+    let node = Text::new(content)
+        .set("x", format!("{x:.1}"))
+        .set("y", format!("{y:.1}"))
+        .set("class", "sans micro")
+        .set("fill", fill)
+        .set("text-anchor", "end")
+        .set("transform", format!("rotate(-90 {x:.1} {y:.1})"));
+    svg.push_str(&node.to_string());
 }
 
 #[derive(Clone, Copy)]

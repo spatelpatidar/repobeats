@@ -1,14 +1,15 @@
 use std::{env, fs, path::PathBuf, process::ExitCode};
 
 use anyhow::{Context, Result, bail};
+use chrono::Utc;
 use repobeats::{
     card::{
         CardKind, CardOptions, CardRenderer, CardSize, CardTheme, ColorScheme, GraphOptions,
-        PeriodDays, SvgCardRenderer, render_contributors, render_graph, render_languages,
-        render_overview,
+        PeriodDays, SvgCardRenderer, graph_dates, render_contributors, render_graph,
+        render_languages, render_overview,
     },
     collector::Collector,
-    domain::RepositoryName,
+    domain::{RepositoryName, parse_username},
 };
 
 const USAGE: &str = "\
@@ -36,10 +37,12 @@ Every option can also be set with a REPOBEATS_<NAME> environment variable.
 Example: --colors \"#0d1117,#58a6ff,#bc8cff,#e6edf3,#f78166\"
 --animate false writes a static card (animations are on by default).
 
---card graph draws a contribution line graph. Its extra options go in
---graph-options as a URL query string (days, from, to, metric, area, grid,
-smooth, hide_title, custom_title, hide_border, radius, height, bg_color,
-border_color, color, title_color, line, point, area_color).";
+--card graph draws the contribution line graph of a GitHub profile (the daily
+counts on the user's contribution calendar). It takes --user (no --repo) and
+needs a token. Its extra options go in --graph-options as a URL query string
+(days, from, to, area, grid, smooth, hide_title, custom_title, hide_border,
+radius, height, bg_color, border_color, color, title_color, line, point,
+area_color).";
 
 #[derive(Default)]
 struct Args {
@@ -113,6 +116,19 @@ fn repository(args: &mut Args) -> Result<RepositoryName> {
     Ok(RepositoryName::new(user, repo)?)
 }
 
+/// The GitHub user whose profile graph to draw: `user`, else the owner of the
+/// repository the workflow runs in.
+fn username(args: &mut Args) -> Result<String> {
+    let user = pick(args.user.take(), "USER")
+        .or_else(|| {
+            env::var("GITHUB_REPOSITORY_OWNER")
+                .ok()
+                .filter(|v| !v.is_empty())
+        })
+        .context("no user: set `user` to the GitHub username to graph")?;
+    Ok(parse_username(&user)?)
+}
+
 fn enum_value<T: serde::de::DeserializeOwned + Default>(
     value: Option<String>,
     what: &str,
@@ -133,9 +149,35 @@ fn boolean(value: Option<String>, what: &str, default: bool) -> Result<bool> {
     }
 }
 
+/// The cards that describe one repository.
+async fn repository_card(
+    collector: &Collector,
+    repository: &RepositoryName,
+    options: CardOptions,
+) -> Result<String> {
+    Ok(match options.kind {
+        CardKind::Activity => {
+            let snapshot = collector.collect(repository).await?;
+            SvgCardRenderer.render(&snapshot, options)?
+        }
+        CardKind::Contributors => {
+            let snapshot = collector.collect(repository).await?;
+            render_contributors(&snapshot, options)?
+        }
+        CardKind::Languages => {
+            let languages = collector.languages(repository).await?;
+            render_languages(repository, &languages, options)
+        }
+        CardKind::Overview => {
+            let overview = collector.overview(repository).await?;
+            render_overview(&overview, options)
+        }
+        CardKind::Graph => bail!("the graph card is of a user, not a repository"),
+    })
+}
+
 async fn run() -> Result<()> {
     let mut args = Args::parse()?;
-    let repository = repository(&mut args)?;
     let options = CardOptions {
         kind: enum_value::<CardKind>(
             pick(args.card.take(), "CARD"),
@@ -186,36 +228,22 @@ async fn run() -> Result<()> {
 
     let api_url = env::var("GITHUB_API_URL").ok();
 
-    eprintln!(
-        "repobeats: collecting {repository} ({:?} card)",
-        options.kind
-    );
     let collector = Collector::new(token.as_deref(), api_url.as_deref(), max_pages)?;
-    let svg = match options.kind {
-        CardKind::Activity => {
-            let snapshot = collector.collect(&repository).await?;
-            SvgCardRenderer.render(&snapshot, options)?
-        }
-        CardKind::Contributors => {
-            let snapshot = collector.collect(&repository).await?;
-            render_contributors(&snapshot, options)?
-        }
-        CardKind::Languages => {
-            let languages = collector.languages(&repository).await?;
-            render_languages(&repository, &languages, options)
-        }
-        CardKind::Overview => {
-            let overview = collector.overview(&repository).await?;
-            render_overview(&overview, options)
-        }
-        CardKind::Graph => {
-            let graph = graph.context("graph options were not parsed")?;
-            let today = chrono::Utc::now().date_naive();
-            let snapshot = collector
-                .collect_days(&repository, graph.lookback_days(today))
-                .await?;
-            render_graph(&snapshot, options, &graph)?
-        }
+    let svg = if options.kind == CardKind::Graph {
+        let username = username(&mut args)?;
+        let graph = graph.context("graph options were not parsed")?;
+        let today = Utc::now().date_naive();
+        let (from, to) = graph_dates(&graph, today)?;
+        eprintln!("repobeats: collecting contributions of {username} ({from} to {to})");
+        let calendar = collector.contributions(&username, from, to).await?;
+        render_graph(&calendar, today, options, &graph)?
+    } else {
+        let repository = repository(&mut args)?;
+        eprintln!(
+            "repobeats: collecting {repository} ({:?} card)",
+            options.kind
+        );
+        repository_card(&collector, &repository, options).await?
     };
 
     if let Some(parent) = filename

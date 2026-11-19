@@ -7,11 +7,11 @@ branding:
 
 inputs:
   token:
-    description: GitHub token used to read repository data. `secrets.GITHUB_TOKEN` works for the current repository. Use a personal access token with read access to contents, issues and pull requests for another private repository. Leave empty for public repositories (60 requests/hour, may hit limits).
+    description: "GitHub token used to read GitHub data. Required for `card: graph`. `secrets.GITHUB_TOKEN` works for the current repository. Use a personal access token with read access to contents, issues and pull requests for another private repository. Leave empty for public repositories (60 requests/hour, may hit limits)."
     required: false
     default: ''
   user:
-    description: Repository owner. Only needed when `repo` is a bare name. Defaults to the owner of the current repository.
+    description: "Repository owner when `repo` is a bare name. For `card: graph` it is the GitHub username to draw. Defaults to the owner of the current repository."
     required: false
     default: ''
   repo:
@@ -19,7 +19,7 @@ inputs:
     required: false
     default: ''
   card:
-    description: "Which card to draw: `activity` (issues, pull requests, pushes, top contributors), `languages` (language breakdown), `contributors` (ranked contributors with bars) or `overview` (stars, forks, issues, license, last push, latest release) or `graph` (line graph of daily contributions, see `graph_options`)."
+    description: "Which card to draw: `activity` (issues, pull requests, pushes, top contributors), `languages` (language breakdown), `contributors` (ranked contributors with bars) or `overview` (stars, forks, issues, license, last push, latest release) or `graph` (line graph of a GitHub profile's daily contributions: set `user`, see `graph_options`)."
     required: false
     default: activity
   theme:
@@ -43,7 +43,7 @@ inputs:
     required: false
     default: '30'
   graph_options:
-    description: "Only for `card: graph`. URL query string with the graph options, for example `days=31&area=true&line=58a6ff&point=f78166`. Supported: days, from, to, metric, area, grid, smooth, hide_title, custom_title, hide_border, radius, height, bg_color, border_color, color, title_color, line, point, area_color."
+    description: "Only for `card: graph`. URL query string with the graph options, for example `days=31&area=true&line=58a6ff&point=f78166`. Supported: days, from, to, labels, area, grid, smooth, hide_title, hide_axis_titles, custom_title, hide_border, radius, height, bg_color, border_color, color, title_color, line, point, area_color."
     required: false
     default: ''
   filename:
@@ -65,4 +65,4 @@ inputs:
 
 runs:
   using: docker
-  image: docker://ghcr.io/spatelpatidar/repobeats:v0.4.0
+  image: docker://ghcr.io/spatelpatidar/repobeats:v0.4.1
