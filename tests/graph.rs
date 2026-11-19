@@ -317,6 +317,50 @@ fn each_label_style_is_drawn() {
     }
 }
 
+/// The numbers written on the value axis, top first.
+fn value_ticks(svg: &str) -> Vec<u32> {
+    let mut ticks = svg
+        .split("text-anchor=\"end\"")
+        .skip(1)
+        .filter_map(|rest| {
+            let text = rest.split("</text>").next()?;
+            text.rsplit('>').next()?.parse::<u32>().ok()
+        })
+        .collect::<Vec<_>>();
+    ticks.sort_unstable_by(|a, b| b.cmp(a));
+    ticks
+}
+
+fn render_with_peak(peak: u32, query: &str) -> String {
+    let mut busy = calendar();
+    busy.days.last_mut().unwrap().1 = peak;
+    flat(&render_graph(&busy, today(), CardOptions::default(), &options(query)).unwrap())
+}
+
+#[test]
+fn value_axis_follows_the_data() {
+    let query = "days=5&labels=none&hide_axis_titles=true";
+    // Peak 20: every second number, like github-readme-activity-graph.
+    assert_eq!(
+        value_ticks(&render_with_peak(20, query)),
+        (0..=10).rev().map(|n| n * 2).collect::<Vec<_>>()
+    );
+    // Peak 15 tops out at 16, in steps of 2.
+    assert_eq!(value_ticks(&render_with_peak(15, query)).first(), Some(&16));
+    // Peak 5: every number from 0 to 5.
+    assert_eq!(
+        value_ticks(&render_with_peak(5, query)),
+        vec![5, 4, 3, 2, 1, 0]
+    );
+    // A big peak gets round steps, not a tick per number (this plot is 242 units tall).
+    let big = value_ticks(&render_with_peak(1_234, query));
+    assert_eq!(big.first(), Some(&1_300), "{big:?}");
+    assert_eq!(big.len(), 14, "{big:?}");
+    // A short graph has less room, so fewer ticks for the same data.
+    let short = value_ticks(&render_with_peak(20, &format!("{query}&height=200")));
+    assert!(short.len() < 11 && short.first() == Some(&20), "{short:?}");
+}
+
 #[test]
 fn grid_can_be_turned_off() {
     assert_eq!(vertical_grid_lines(&render("days=31&grid=false")), 0);

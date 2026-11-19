@@ -140,7 +140,7 @@ pub fn render_graph(
     let plot_bottom = height - label_pad - if titled { X_TITLE_PAD } else { 0.0 };
     let plot_height = plot_bottom - plot_top;
     let max = days.iter().map(|(_, value)| *value).max().unwrap_or(0);
-    let (step, top) = nice_scale(max);
+    let (step, top) = nice_scale(max, plot_height);
 
     let x_at = |index: usize| {
         if count == 1 {
@@ -480,21 +480,32 @@ fn select(
         .collect())
 }
 
-/// Tick step and axis top for a maximum value: whole-number ticks, about five
-/// intervals. `nice_scale(0)` is `(1, 4)` so an empty graph still has a scale.
-fn nice_scale(max: u32) -> (u32, u32) {
+/// Closest two ticks of the value axis may be, in card units.
+const MIN_TICK_SPACE: f64 = 18.0;
+
+/// Tick step and axis top for the highest daily count on a plot `plot_height`
+/// tall. The step is the smallest of 1, 2, 5, 10, 20, 50 ... that still leaves
+/// `MIN_TICK_SPACE` between ticks, so the axis gets finer as the graph gets
+/// taller and coarser as the numbers grow (the way Chartist, which
+/// github-readme-activity-graph uses, sizes its axis). Ticks are whole
+/// numbers. With no activity at all the axis is `(1, 4)`.
+fn nice_scale(max: u32, plot_height: f64) -> (u32, u32) {
     if max == 0 {
         return (1, 4);
     }
-    let raw = f64::from(max) / 5.0;
-    let magnitude = 10_f64.powf(raw.log10().floor().max(0.0));
-    let step = [1.0, 2.0, 5.0, 10.0]
-        .into_iter()
-        .map(|factor| factor * magnitude)
-        .find(|step| *step >= raw)
-        .unwrap_or(10.0 * magnitude)
-        .max(1.0) as u32;
-    (step, max.div_ceil(step) * step)
+    let max = u64::from(max);
+    let mut magnitude = 1_u64;
+    loop {
+        for factor in [1, 2, 5] {
+            let step = factor * magnitude;
+            let intervals = max.div_ceil(step);
+            if step >= max || plot_height / intervals as f64 >= MIN_TICK_SPACE {
+                let clamp = |value: u64| u32::try_from(value).unwrap_or(u32::MAX);
+                return (clamp(step), clamp(intervals * step));
+            }
+        }
+        magnitude *= 10;
+    }
 }
 
 /// `Nov 3`, or `Nov 3 '25` when the range spans years.
@@ -623,14 +634,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn scale_uses_whole_numbers() {
-        assert_eq!(nice_scale(0), (1, 4));
-        assert_eq!(nice_scale(1), (1, 1));
-        assert_eq!(nice_scale(3), (1, 3));
-        assert_eq!(nice_scale(7), (2, 8));
-        assert_eq!(nice_scale(100), (20, 100));
-        assert_eq!(nice_scale(101), (50, 150));
-        assert_eq!(nice_scale(1_234), (500, 1_500));
+    fn scale_gets_finer_with_room_and_coarser_with_big_numbers() {
+        // The default plot is about 198 units tall: ticks at least 18 apart.
+        let tall = 198.0;
+        assert_eq!(nice_scale(0, tall), (1, 4));
+        assert_eq!(nice_scale(1, tall), (1, 1));
+        assert_eq!(nice_scale(5, tall), (1, 5));
+        assert_eq!(nice_scale(10, tall), (1, 10));
+        assert_eq!(nice_scale(12, tall), (2, 12));
+        assert_eq!(nice_scale(15, tall), (2, 16));
+        assert_eq!(nice_scale(20, tall), (2, 20));
+        assert_eq!(nice_scale(100, tall), (10, 100));
+        assert_eq!(nice_scale(101, tall), (10, 110));
+        assert_eq!(nice_scale(1_234, tall), (200, 1_400));
+        // A short plot has less room, so the same maximum gets a coarser step.
+        assert_eq!(nice_scale(20, 80.0), (5, 20));
+        assert_eq!(nice_scale(20, 400.0), (1, 20));
+        // Huge counts do not overflow.
+        assert!(nice_scale(u32::MAX, tall).0 > 1);
     }
 
     #[test]
