@@ -11,11 +11,11 @@
 //! | `smooth`       | Curve the line instead of straight segments          | `true`           |
 //! | `hide_title`   | Drop the title row                                   | `false`          |
 //! | `custom_title` | Replace the title                                    |                  |
-//! | `labels`       | x-axis labels: `auto`, `date`, `number`, `sideways`, `none` | `auto`     |
+//! | `labels`       | x-axis labels: `auto` (day numbers), `date`, `number`, `sideways`, `none` | `auto` |
 //! | `hide_axis_titles` | Drop the "Days" and "Contributions" axis titles | `false`          |
 //! | `hide_border`  | No border                                            | `false`          |
 //! | `radius`       | Corner radius, 0 to 16 (clamped)                     | `0`              |
-//! | `height`       | Height in card units, 200 to 600 (clamped)           | `318`            |
+//! | `height`       | Height in card units, 200 to 600 (clamped)           | `420`            |
 //! | `bg_color`, `border_color`, `color`, `title_color`, `line`, `point`, `area_color` | Hex colors, `#` optional. `bg_color` also takes `transparent`. Each one replaces that part of the theme. | from the theme |
 
 use chrono::NaiveDate;
@@ -27,17 +27,16 @@ pub const DEFAULT_DAYS: u16 = 31;
 pub const MAX_DAYS: u16 = 365;
 pub const MIN_HEIGHT: u32 = 200;
 pub const MAX_HEIGHT: u32 = 600;
-pub const DEFAULT_HEIGHT: u32 = 318;
+pub const DEFAULT_HEIGHT: u32 = 420;
 pub const MAX_RADIUS: u32 = 16;
 
 /// How the days are written under the x axis.
 ///
-/// Every mode labels each day while there is room, and spaces the labels out
-/// when there is not, so they never overlap.
+/// Every mode labels every day, as github-readme-activity-graph does, so on
+/// long ranges the labels run together.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum LabelMode {
-    /// Picks by width: full dates, then day numbers, then smaller day
-    /// numbers, then dates written sideways, then spaced-out dates.
+    /// The day of the month, like the reference. Same as `Number`.
     #[default]
     Auto,
     /// Horizontal dates such as `Nov 9`.
