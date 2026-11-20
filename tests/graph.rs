@@ -14,10 +14,10 @@ fn flat(svg: &str) -> String {
     svg.replace('\n', "")
 }
 
-/// The `d` attribute of the data line (the only path with `pathLength`).
+/// The `d` attribute of the data line.
 fn line_path(svg: &str) -> &str {
-    let marker = "pathLength=\"1\" d=\"";
-    let start = svg.find(marker).expect("no line") + marker.len();
+    let end = svg.find("class=\"ct-line\"").expect("no line");
+    let start = svg[..end].rfind("d=\"").unwrap() + 3;
     &svg[start..start + svg[start..].find('"').unwrap()]
 }
 
@@ -81,7 +81,7 @@ fn defaults() {
     let defaults = options("");
     assert_eq!(defaults.range, GraphRange::Last(31));
     assert!(defaults.grid && defaults.smooth && !defaults.area);
-    assert_eq!(defaults.height, 318);
+    assert_eq!(defaults.height, 420);
 }
 
 #[test]
@@ -187,68 +187,60 @@ fn dates_come_from_days_or_the_range() {
 #[test]
 fn draws_the_daily_counts() {
     let svg = render("days=5");
-    assert!(svg.contains("15 contributions · Nov 9 – Nov 13"), "{svg}");
     // The point for each day carries its count.
     for (date, count) in [("Nov 9", 1), ("Nov 11", 3), ("Nov 13", 5)] {
         assert!(svg.contains(&format!("<title>{date}: {count}</title>")));
     }
+    assert_eq!(points(&svg), 5);
 }
 
-/// Labels written under the axis: horizontal ones are centered on their day,
-/// sideways ones are rotated.
+/// Labels written under the axis, one text element each.
 fn axis_labels(svg: &str) -> usize {
-    svg.matches("text-anchor=\"middle\"").count() + svg.matches("transform=\"rotate(").count()
+    let plain = svg
+        .split("<text")
+        .filter(|text| {
+            text.contains("class=\"sans label\"")
+                && !text.contains("text-anchor=\"end\"")
+                && !text.contains("text-anchor=\"middle\"")
+        })
+        .count();
+    plain + svg.matches("class=\"sans micro\"").count()
 }
 
+fn grid_lines(svg: &str) -> usize {
+    svg.matches("class=\"ct-grid\"").count()
+}
+
+/// Grid lines that run up and down: all but the one for each value tick.
 fn vertical_grid_lines(svg: &str) -> usize {
-    svg.matches("class=\"vgrid\"").count()
+    grid_lines(svg) - value_ticks(svg).len()
 }
 
 fn points(svg: &str) -> usize {
-    svg.matches("<circle").count()
+    svg.matches("class=\"ct-point\"").count()
 }
 
 #[test]
-fn every_day_is_labeled_while_there_is_room() {
-    // Narrow slots: the day of the month, for every one of the 31 days.
+fn every_day_is_labeled_with_its_day_of_the_month() {
+    // Like the reference: one label under every day, however many days there are.
+    for days in [14, 31, 60, 90, 365] {
+        let svg = render_plain(&format!("days={days}"));
+        assert_eq!(axis_labels(&svg), days, "{days} days");
+    }
     let month = render_plain("days=31");
-    assert_eq!(axis_labels(&month), 31);
     for number in ["14", "30", "31", "1", "13"] {
         assert!(month.contains(&format!(">{number}</text>")), "{number}");
     }
-    // Wide slots: the full date, for every day.
-    let fortnight = render_plain("days=14");
-    assert_eq!(axis_labels(&fortnight), 14);
-    assert!(fortnight.contains(">Nov 9</text>") && fortnight.contains(">Nov 13</text>"));
-    // Two months: still a label for every day, in smaller type.
-    let two_months = render_plain("days=60");
-    assert_eq!(axis_labels(&two_months), 60);
-    assert!(two_months.contains("class=\"sans tiny\""));
 }
 
 #[test]
-fn long_ranges_write_a_date_sideways_under_every_day() {
-    let quarter = render_plain("days=90");
-    assert_eq!(axis_labels(&quarter), 90);
-    assert_eq!(quarter.matches("transform=\"rotate(-90").count(), 90);
-    assert!(quarter.contains(">Aug 16</text>") && quarter.contains(">Nov 13</text>"));
-}
-
-#[test]
-fn grid_lines_and_points_are_daily_as_long_as_they_fit() {
-    for days in [14, 31, 60, 90, 120] {
+fn grid_lines_and_points_are_daily() {
+    for days in [1, 14, 31, 90, 365] {
         let svg = render_plain(&format!("days={days}"));
         assert_eq!(vertical_grid_lines(&svg), days, "grid, {days} days");
         assert_eq!(points(&svg), days, "points, {days} days");
     }
-    // A year: too dense for one line or point per day. Labels are spaced out.
-    let year = render_plain("days=365");
-    assert!(vertical_grid_lines(&year) < 100);
-    assert_eq!(points(&year), 0);
-    let labels = axis_labels(&year);
-    assert!((5..40).contains(&labels), "{labels}");
-    assert!(year.contains(">Nov 13 '26</text>"));
-    assert_finite(&year);
+    assert_finite(&render_plain("days=365"));
 }
 
 #[test]
@@ -256,7 +248,7 @@ fn axis_titles_are_drawn_and_can_be_hidden() {
     let svg = render("days=31");
     assert!(svg.contains(">Days</text>") && svg.contains(">Contributions</text>"));
     // The vertical title is written sideways, the horizontal one is not.
-    assert!(svg.contains("rotate(-90 16.0"));
+    assert!(svg.contains("rotate(-90, 20.00"));
     let plain = render("days=31&hide_axis_titles=true");
     assert!(!plain.contains(">Days</text>") && !plain.contains(">Contributions</text>"));
     assert!(options("hide_axis_titles=1").hide_axis_titles);
@@ -286,30 +278,22 @@ fn labels_option_picks_the_style() {
 
 #[test]
 fn each_label_style_is_drawn() {
-    // 31 days: day numbers and sideways dates fit one under every day.
     let numbers = render_plain("days=31&labels=number");
     assert_eq!(axis_labels(&numbers), 31);
     assert!(numbers.contains(">14</text>") && numbers.contains(">13</text>"));
+    let dates = render_plain("days=14&labels=date");
+    assert_eq!(axis_labels(&dates), 14);
+    assert!(dates.contains(">Nov 9</text>") && dates.contains(">Nov 13</text>"));
     let sideways = render_plain("days=31&labels=sideways");
     assert_eq!(axis_labels(&sideways), 31);
     assert_eq!(sideways.matches("transform=\"rotate(-90").count(), 31);
-    // Full dates do not fit 31 across, so they are spaced out, newest last.
-    let dates = render_plain("days=31&labels=date");
-    assert!(
-        (5..20).contains(&axis_labels(&dates)),
-        "{}",
-        axis_labels(&dates)
-    );
-    assert!(dates.contains(">Nov 13</text>"));
     // No labels: the grid is still daily.
     let none = render_plain("days=31&labels=none");
     assert_eq!(axis_labels(&none), 0);
     assert_eq!(vertical_grid_lines(&none), 31);
-    // Day numbers past the width they fit in are spaced out, not overlapped.
-    let crowded = render_plain("days=90&labels=number");
-    assert!((20..90).contains(&axis_labels(&crowded)));
-    // `auto` is the default.
+    // `auto` is the default, and writes the day numbers.
     assert_eq!(render("days=31"), render("days=31&labels=auto"));
+    assert_eq!(render("days=31"), render("days=31&labels=number"));
     for mode in ["date", "number", "sideways", "none"] {
         for days in [1, 7, 31, 90, 365] {
             assert_finite(&render(&format!("days={days}&labels={mode}")));
@@ -320,11 +304,12 @@ fn each_label_style_is_drawn() {
 /// The numbers written on the value axis, top first.
 fn value_ticks(svg: &str) -> Vec<u32> {
     let mut ticks = svg
-        .split("text-anchor=\"end\"")
+        .split("<text")
         .skip(1)
-        .filter_map(|rest| {
-            let text = rest.split("</text>").next()?;
-            text.rsplit('>').next()?.parse::<u32>().ok()
+        .filter(|text| text.contains("text-anchor=\"end\""))
+        .filter_map(|text| {
+            let content = text.split("</text>").next()?;
+            content.rsplit('>').next()?.parse::<u32>().ok()
         })
         .collect::<Vec<_>>();
     ticks.sort_unstable_by(|a, b| b.cmp(a));
@@ -338,7 +323,8 @@ fn render_with_peak(peak: u32, query: &str) -> String {
 }
 
 #[test]
-fn value_axis_follows_the_data() {
+fn value_axis_follows_the_reference() {
+    // Default height 420 leaves a 270 unit plot.
     let query = "days=5&labels=none&hide_axis_titles=true";
     // Peak 20: every second number, like github-readme-activity-graph.
     assert_eq!(
@@ -346,30 +332,32 @@ fn value_axis_follows_the_data() {
         (0..=10).rev().map(|n| n * 2).collect::<Vec<_>>()
     );
     // Peak 15 tops out at 16, in steps of 2.
-    assert_eq!(value_ticks(&render_with_peak(15, query)).first(), Some(&16));
+    let fifteen = value_ticks(&render_with_peak(15, query));
+    assert_eq!((fifteen.first(), fifteen.len()), (Some(&16), 9));
     // Peak 5: every number from 0 to 5.
     assert_eq!(
         value_ticks(&render_with_peak(5, query)),
         vec![5, 4, 3, 2, 1, 0]
     );
-    // A big peak gets round steps, not a tick per number (this plot is 242 units tall).
+    // A big peak gets round steps, not a tick per number.
     let big = value_ticks(&render_with_peak(1_234, query));
-    assert_eq!(big.first(), Some(&1_300), "{big:?}");
-    assert_eq!(big.len(), 14, "{big:?}");
+    assert_eq!(big, vec![1_250, 1_000, 750, 500, 250, 0]);
     // A short graph has less room, so fewer ticks for the same data.
     let short = value_ticks(&render_with_peak(20, &format!("{query}&height=200")));
-    assert!(short.len() < 11 && short.first() == Some(&20), "{short:?}");
+    assert_eq!(short, vec![20, 10, 0]);
 }
 
 #[test]
 fn grid_can_be_turned_off() {
-    assert_eq!(vertical_grid_lines(&render("days=31&grid=false")), 0);
+    assert_eq!(grid_lines(&render("days=31&grid=false")), 0);
 }
 
 #[test]
 fn date_range_selects_those_days() {
     let svg = render("from=2026-11-10&to=2026-11-12");
-    assert!(svg.contains("9 contributions · Nov 10 – Nov 12"), "{svg}");
+    assert_eq!(points(&svg), 3);
+    assert!(svg.contains("<title>Nov 10: 2</title>") && svg.contains("<title>Nov 12: 4</title>"));
+    assert!(!svg.contains("<title>Nov 9:") && !svg.contains("<title>Nov 13:"));
 }
 
 #[test]
@@ -378,25 +366,14 @@ fn days_missing_from_the_calendar_count_as_zero() {
     sparse.days.retain(|(date, _)| *date != day(11, 12));
     let svg =
         flat(&render_graph(&sparse, today(), CardOptions::default(), &options("days=5")).unwrap());
-    assert!(svg.contains("11 contributions"), "{svg}");
     assert!(svg.contains("<title>Nov 12: 0</title>"));
 }
 
 #[test]
-fn singular_contribution() {
-    assert!(render("days=1&from=").contains("5 contributions"));
-    let mut one = calendar();
-    one.days.last_mut().unwrap().1 = 1;
-    let svg =
-        flat(&render_graph(&one, today(), CardOptions::default(), &options("days=1")).unwrap());
-    assert!(svg.contains("1 contribution ·"), "{svg}");
-}
-
-#[test]
-fn single_day_draws_without_a_line() {
+fn single_day_draws_without_a_curve() {
     let svg = render("days=1");
-    assert!(svg.contains("<circle"));
-    assert!(!svg.contains("pathLength"));
+    assert_eq!(points(&svg), 1);
+    assert!(!line_path(&svg).contains('C') && !line_path(&svg).contains('L'));
     assert_finite(&svg);
 }
 
@@ -405,7 +382,7 @@ fn empty_activity_still_has_a_scale() {
     let mut empty = calendar();
     empty.days.iter_mut().for_each(|(_, count)| *count = 0);
     let svg = flat(&render_graph(&empty, today(), CardOptions::default(), &options("")).unwrap());
-    assert!(svg.contains("0 contributions"));
+    assert!(value_ticks(&svg).len() >= 2);
     assert_finite(&svg);
 }
 
@@ -437,13 +414,14 @@ fn title_uses_the_name_then_the_login() {
 
 #[test]
 fn switches_change_the_output() {
-    assert!(render("days=5&area=true").contains("url(#repobeats-area)"));
-    assert!(!render("days=5").contains("url(#repobeats-area)"));
+    assert!(render("days=5&area=true").contains("class=\"ct-area\""));
+    assert!(!render("days=5").contains("class=\"ct-area\""));
     assert!(!render("days=5&hide_title=true").contains("Octocat"));
     let straight = render("days=5&smooth=false");
-    assert!(line_path(&straight).contains(" L") && !line_path(&straight).contains(" C"));
+    assert!(line_path(&straight).contains('L') && !line_path(&straight).contains('C'));
     let curved = render("days=5");
-    assert!(line_path(&curved).contains(" C") && !line_path(&curved).contains(" L"));
+    assert!(line_path(&curved).contains('C') && !line_path(&curved).contains('L'));
+    assert!(curved.contains("@keyframes dash") && curved.contains("@keyframes blink"));
     let static_svg = flat(
         &render_graph(
             &calendar(),

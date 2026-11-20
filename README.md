@@ -176,11 +176,11 @@ If `user` is empty, the owner of the repository the workflow runs in is used. On
 | `smooth` | `true` | Curved line. `false` gives straight segments. |
 | `hide_title` | `false` | Remove the title row. |
 | `custom_title` | `Name's Contribution Graph` | Up to 64 characters, longer is cut. The name is the profile name, else the username. |
-| `labels` | `auto` | How days are written under the x axis: `auto` (by width), `date` (`Nov 9`), `number` (`14`, `15`), `sideways` (dates written sideways, one under every day) or `none`. Each style labels every day while there is room and spaces the labels out when there is not. |
+| `labels` | `auto` | How days are written under the x axis: `auto` (the day of the month, like github-readme-activity-graph), `date` (`Nov 9`), `number` (`14`, `15`), `sideways` (dates written sideways) or `none`. Every style labels every day, so long ranges run together. |
 | `hide_axis_titles` | `false` | Remove the "Days" and "Contributions" axis titles. |
 | `hide_border` | `false` | No border. |
 | `radius` | `0` | Corner radius, 0 to 16 (larger values are set to 16). |
-| `height` | `318` | 200 to 600 (out-of-range values are clamped). The width follows `size`. |
+| `height` | `420` | 200 to 600 (out-of-range values are clamped). The width follows `size`. |
 | `bg_color` | theme | Hex code with or without `#`, or `transparent`. |
 | `border_color`, `color`, `title_color`, `line`, `point`, `area_color` | theme | Hex codes. `color` is the text color. |
 

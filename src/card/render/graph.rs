@@ -19,39 +19,23 @@ use thiserror::Error;
 
 use super::{CardOptions, Palette, color_comment, extra::ellipsize, style};
 use crate::{
+    card::CardSize,
     card::graph_options::{Background, GraphColors, GraphOptions, GraphRange, LabelMode},
     model::ContributionCalendar,
 };
 
-const WIDTH: f64 = 814.0;
-/// Left edge of the plot, without and with the vertical axis title.
-const LEFT: f64 = 52.0;
-const LEFT_TITLED: f64 = 66.0;
-const RIGHT: f64 = WIDTH - 24.0;
-const BOTTOM_PAD: f64 = 40.0;
-/// Extra room under the date labels for the horizontal axis title.
-const X_TITLE_PAD: f64 = 18.0;
-/// Room under the plot when there are no date labels.
-const NO_LABEL_PAD: f64 = 14.0;
-/// Space one label needs along the axis, in each style, when labels must be spaced out.
-const NUMBER_SPACING: f64 = 14.0;
-const SIDEWAYS_SPACING: f64 = 9.0;
-/// Room under the plot for dates written sideways.
-const ROTATED_PAD: f64 = 62.0;
-const TITLE_TOP: f64 = 62.0;
-const NO_TITLE_TOP: f64 = 28.0;
-/// Width of one day on the axis (card units) and what is written under it.
-/// Wide slots get a full date ("Nov 9"), then the day of the month, then the
-/// day of the month in smaller type, then the date written sideways. Below
-/// `ROTATED_MIN_SLOT` one label per day cannot fit, and every few days get one.
-const FULL_DATE_SLOT: f64 = 50.0;
-const DAY_NUMBER_SLOT: f64 = 21.0;
-const SMALL_NUMBER_SLOT: f64 = 12.0;
-const ROTATED_MIN_SLOT: f64 = 7.5;
-/// A vertical grid line for every day, and a point for every day, down to
-/// these widths. Beyond that the grid follows the labels and the line has no points.
-const GRID_MIN_SLOT: f64 = 5.0;
-const POINT_MIN_SLOT: f64 = 6.0;
+/// The graph is laid out in 1200 x `height` units, like github-readme-activity-graph.
+pub const WIDTH: f64 = 1200.0;
+/// Space around the plot, as in the reference: the value axis labels and
+/// title sit in `Y_OFFSET`, the date labels and title in `X_OFFSET`.
+const PAD_TOP: f64 = 80.0;
+const PAD_RIGHT: f64 = 50.0;
+const PAD_BOTTOM: f64 = 20.0;
+const PAD_LEFT: f64 = 20.0;
+const Y_OFFSET: f64 = 70.0;
+const X_OFFSET: f64 = 50.0;
+/// Closest two value-axis ticks may be (the reference's `scaleMinSpace`).
+const SCALE_MIN_SPACE: f64 = 20.0;
 /// Longest custom title, in characters.
 const TITLE_LIMIT: usize = 64;
 
@@ -102,6 +86,9 @@ impl Colors {
 
 /// Draws the contribution graph of `calendar`. `today` (UTC) is the last day
 /// of a `days=N` range.
+///
+/// The layout, the value-axis rule, the labels and the animation follow
+/// github-readme-activity-graph (`src/createChart.ts`, `styles/graphStyle.ts`).
 pub fn render_graph(
     calendar: &ContributionCalendar,
     today: NaiveDate,
@@ -111,60 +98,28 @@ pub fn render_graph(
     let days = select(calendar, today, graph)?;
     let palette = Palette::resolve(&card);
     let colors = Colors::resolve(&palette, &graph.colors, graph.hide_border);
-
     let height = f64::from(graph.height);
-    let plot_top = if graph.hide_title {
-        NO_TITLE_TOP
-    } else {
-        TITLE_TOP
-    };
     let count = days.len();
-    let titled = !graph.hide_axis_titles;
-    let left = if titled { LEFT_TITLED } else { LEFT };
-    // Width of one day, which decides how the date axis is written.
-    let slot = if count > 1 {
-        (RIGHT - left) / (count - 1) as f64
-    } else {
-        RIGHT - left
-    };
-    let sideways = match graph.labels {
-        LabelMode::Auto => (ROTATED_MIN_SLOT..SMALL_NUMBER_SLOT).contains(&slot),
-        LabelMode::Sideways => true,
-        _ => false,
-    };
-    let label_pad = match graph.labels {
-        LabelMode::None => NO_LABEL_PAD,
-        _ if sideways => ROTATED_PAD,
-        _ => BOTTOM_PAD,
-    };
-    let plot_bottom = height - label_pad - if titled { X_TITLE_PAD } else { 0.0 };
-    let plot_height = plot_bottom - plot_top;
-    let max = days.iter().map(|(_, value)| *value).max().unwrap_or(0);
-    let (step, top) = nice_scale(max, plot_height);
 
-    let x_at = |index: usize| {
-        if count == 1 {
-            (left + RIGHT) / 2.0
-        } else {
-            left + (RIGHT - left) * index as f64 / (count - 1) as f64
-        }
-    };
-    let y_at = |value: u32| plot_bottom - plot_height * f64::from(value) / f64::from(top);
-    let points = days
-        .iter()
-        .enumerate()
-        .map(|(index, (_, value))| (x_at(index), y_at(*value)))
-        .collect::<Vec<_>>();
+    // Drawing area: (x1, y1) is the bottom left, (x2, y2) the top right.
+    let x1 = PAD_LEFT + Y_OFFSET;
+    let x2 = (WIDTH - PAD_RIGHT).max(x1 + 1.0);
+    let y2 = PAD_TOP;
+    let y1 = (height - PAD_BOTTOM - X_OFFSET).max(y2 + 1.0);
+    let x_length = x2 - x1;
+    let y_length = y1 - y2;
 
-    let mut body = String::with_capacity(8_000);
-    let _ = write!(
-        body,
-        r#"<defs><linearGradient id="repobeats-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{0}" stop-opacity="0.4"/><stop offset="1" stop-color="{0}" stop-opacity="0"/></linearGradient></defs>"#,
-        colors.area
-    );
+    let step_length = x_length / (count.max(2) - 1) as f64;
+    let x_at = |index: usize| x1 + step_length * index as f64;
 
+    let high = days.iter().map(|(_, value)| *value).max().unwrap_or(0);
+    let bounds = bounds(y_length, f64::from(high), 0.0, SCALE_MIN_SPACE);
+    let y_at = |value: f64| y1 - y_length * (value - bounds.min) / bounds.range;
+
+    let mut body = String::with_capacity(16_000);
+
+    // Title: centered on the card.
     if !graph.hide_title {
-        let total: u32 = days.iter().map(|(_, value)| value).sum();
         let title = match &graph.title {
             Some(title) => ellipsize(title, TITLE_LIMIT),
             None => format!(
@@ -174,206 +129,167 @@ pub fn render_graph(
         };
         text(
             &mut body,
-            Anchor::Start,
-            (24.0, 36.0),
-            "sans small bold",
+            Anchor::Middle,
+            (WIDTH / 2.0, 42.0),
+            "sans header",
             &colors.title,
             &title,
         );
-        let summary = format!(
-            "{total} {} · {} – {}",
-            if total == 1 {
-                "contribution"
-            } else {
-                "contributions"
-            },
-            short_date(days[0].0, false),
-            short_date(days[count - 1].0, false),
-        );
-        text(
-            &mut body,
-            Anchor::End,
-            (RIGHT + 14.0, 36.0),
-            "sans smaller",
-            &colors.text,
-            &summary,
-        );
     }
 
-    // Horizontal grid and the value axis.
-    let ticks = top / step;
-    for tick in 0..=ticks {
-        let value = tick * step;
-        let y = y_at(value);
-        if graph.grid || tick == 0 {
+    // Grid lines: one for every day, one for every value tick.
+    let mut grid = String::new();
+    let mut labels = String::new();
+    for (index, (date, _)) in days.iter().enumerate() {
+        let x = x_at(index);
+        if graph.grid {
             let _ = write!(
-                body,
-                r#"<line x1="{left}" y1="{y:.1}" x2="{RIGHT}" y2="{y:.1}" stroke="{}" stroke-opacity="{}" stroke-width="1"/>"#,
-                colors.text,
-                if tick == 0 { 0.4 } else { 0.15 },
-            );
-        }
-        text(
-            &mut body,
-            Anchor::End,
-            (left - 10.0, y + 4.0),
-            "sans smaller",
-            &colors.text,
-            &value.to_string(),
-        );
-    }
-
-    // Date axis: a vertical grid line and a label for every day while they
-    // fit. Longer ranges label the latest day and every `stride` days before it.
-    let multi_year = days[0].0.year() != days[count - 1].0.year();
-    let spaced = |spacing: f64| (spacing / slot).ceil().max(1.0) as usize;
-    let date_spacing = if multi_year { 78.0 } else { 56.0 };
-    let number_class = if slot >= DAY_NUMBER_SLOT {
-        "sans smaller"
-    } else {
-        "sans tiny"
-    };
-    let (stride, style_of): (usize, LabelStyle) = match graph.labels {
-        LabelMode::Auto => {
-            if slot >= FULL_DATE_SLOT {
-                (1, LabelStyle::Date)
-            } else if slot >= DAY_NUMBER_SLOT {
-                (1, LabelStyle::Number("sans smaller"))
-            } else if slot >= SMALL_NUMBER_SLOT {
-                (1, LabelStyle::Number("sans tiny"))
-            } else if sideways {
-                (1, LabelStyle::Sideways)
-            } else {
-                (spaced(date_spacing), LabelStyle::Date)
-            }
-        }
-        LabelMode::Date => (spaced(date_spacing), LabelStyle::Date),
-        LabelMode::Number => (spaced(NUMBER_SPACING), LabelStyle::Number(number_class)),
-        LabelMode::Sideways => (spaced(SIDEWAYS_SPACING), LabelStyle::Sideways),
-        LabelMode::None => (spaced(date_spacing), LabelStyle::None),
-    };
-    if graph.grid && count > 1 {
-        let (every, opacity) = if slot >= GRID_MIN_SLOT {
-            (1, if slot >= SMALL_NUMBER_SLOT { 0.15 } else { 0.1 })
-        } else {
-            (stride, 0.15)
-        };
-        for index in (0..count).rev().step_by(every) {
-            let x = x_at(index);
-            let _ = write!(
-                body,
-                r#"<line class="vgrid" x1="{x:.1}" y1="{plot_top}" x2="{x:.1}" y2="{plot_bottom}" stroke="{}" stroke-opacity="{opacity}" stroke-width="1"/>"#,
+                grid,
+                r#"<line x1="{x:.2}" x2="{x:.2}" y1="{y2:.2}" y2="{y1:.2}" class="ct-grid" stroke="{}"/>"#,
                 colors.text
             );
         }
-    }
-    for index in (0..count).rev().step_by(stride) {
-        let x = x_at(index);
-        let date = days[index].0;
-        match style_of {
-            LabelStyle::Date => text(
-                &mut body,
-                Anchor::Middle,
-                (x, plot_bottom + 22.0),
-                "sans smaller",
-                &colors.text,
-                &short_date(date, multi_year),
-            ),
-            LabelStyle::Number(class) => text(
-                &mut body,
-                Anchor::Middle,
-                (x, plot_bottom + 22.0),
-                class,
+        let date = *date;
+        match graph.labels {
+            LabelMode::None => {}
+            LabelMode::Auto | LabelMode::Number => text(
+                &mut labels,
+                Anchor::Start,
+                (x - 4.5, y1 + 20.0),
+                "sans label",
                 &colors.text,
                 &date.day().to_string(),
             ),
-            LabelStyle::None => {}
-            LabelStyle::Sideways => sideways_text(
-                &mut body,
-                (x, plot_bottom + 8.0),
+            LabelMode::Date => text(
+                &mut labels,
+                Anchor::Start,
+                (x - 4.5, y1 + 20.0),
+                "sans label",
                 &colors.text,
-                &short_date(date, multi_year),
+                &short_date(date, false),
+            ),
+            LabelMode::Sideways => sideways_text(
+                &mut labels,
+                (x + 4.0, y1 + 8.0),
+                &colors.text,
+                &short_date(date, false),
             ),
         }
     }
-
-    // Axis titles: "Days" centered under the date labels, "Contributions"
-    // turned sideways along the value axis.
-    if titled {
+    for value in &bounds.values {
+        let y = y_at(*value);
+        if graph.grid {
+            let _ = write!(
+                grid,
+                r#"<line y1="{y:.2}" y2="{y:.2}" x1="{x1:.2}" x2="{x2:.2}" class="ct-grid" stroke="{}"/>"#,
+                colors.text
+            );
+        }
         text(
-            &mut body,
-            Anchor::Middle,
-            ((left + RIGHT) / 2.0, height - 12.0),
-            "sans smaller bold",
+            &mut labels,
+            Anchor::End,
+            (x1 - 10.0, y + 4.5),
+            "sans label",
             &colors.text,
-            "Days",
+            &number(*value),
         );
-        let middle = plot_top + plot_height / 2.0;
-        let node = Text::new("Contributions")
-            .set("x", "16.0")
-            .set("y", format!("{middle:.1}"))
-            .set("class", "sans smaller bold")
-            .set("fill", colors.text.as_str())
-            .set("text-anchor", "middle")
-            .set("transform", format!("rotate(-90 16.0 {middle:.1})"));
-        body.push_str(&node.to_string());
     }
+    let _ = write!(body, r#"<g>{grid}</g>"#);
 
-    // Area, line, points.
-    let line = if graph.smooth && count > 2 {
+    // Area, line and points.
+    let points = days
+        .iter()
+        .enumerate()
+        .map(|(index, (_, value))| (x_at(index), y_at(f64::from(*value))))
+        .collect::<Vec<_>>();
+    let path = if graph.smooth {
         smooth_path(&points)
     } else {
         straight_path(&points)
     };
-    if graph.area && count > 1 {
-        let first = points[0];
-        let last = points[count - 1];
+    let mut series = String::new();
+    if graph.area && path.len() > 1 {
+        let base = y_at(0.0_f64.min(bounds.max).max(bounds.min));
+        let (first, last) = (points[0], points[count - 1]);
+        let mut area = vec![
+            Segment::Move(first.0, base),
+            Segment::Line(first.0, first.1),
+        ];
+        area.extend(path[1..].iter().copied());
+        area.push(Segment::Line(last.0, base));
         let _ = write!(
-            body,
-            r#"<path class="sweep" d="M{:.1},{plot_bottom:.1} L{} L{:.1},{plot_bottom:.1} Z" fill="url(#repobeats-area)"/>"#,
-            first.0,
-            line_from_first(&line),
-            last.0,
+            series,
+            r#"<path d="{}" class="ct-area" fill="{}"/>"#,
+            stringify(&area, true),
+            colors.area
         );
     }
-    let draw = if card.animate { r#" class="draw""# } else { "" };
-    if count > 1 {
+    if !path.is_empty() {
         let _ = write!(
-            body,
-            r#"<path{draw} pathLength="1" d="{line}" fill="none" stroke="{}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>"#,
+            series,
+            r#"<path d="{}" class="ct-line" fill="none" stroke="{}"/>"#,
+            stringify(&path, false),
             colors.line
         );
     }
-    if slot >= POINT_MIN_SLOT {
-        let radius = (slot * 0.38).clamp(1.6, 3.5);
-        let ring = if radius < 3.0 { 0.8 } else { 1.5 };
-        for (index, ((date, value), (x, y))) in days.iter().zip(&points).enumerate() {
-            let _ = write!(
-                body,
-                r#"<circle class="dot" style="animation-delay:{}ms" cx="{x:.1}" cy="{y:.1}" r="{radius:.1}" fill="{}" stroke="{}" stroke-width="{ring}"><title>{}: {value}</title></circle>"#,
-                (DRAW_DELAY_MS + DRAW_MS * index as f64 / (count.max(2) - 1) as f64).round(),
-                colors.point,
-                if colors.background == "transparent" {
-                    "none"
-                } else {
-                    &colors.background
-                },
-                short_date(*date, multi_year),
-            );
-        }
+    for ((date, value), (x, y)) in days.iter().zip(&points) {
+        let _ = write!(
+            series,
+            r#"<line x1="{x:.2}" y1="{y:.2}" x2="{:.2}" y2="{y:.2}" class="ct-point" stroke="{}"><title>{}: {value}</title></line>"#,
+            x + 0.01,
+            colors.point,
+            short_date(*date, false),
+        );
+    }
+    let _ = write!(body, "<g>{series}</g><g>{labels}</g>");
+
+    // Axis titles.
+    if !graph.hide_axis_titles {
+        let node = Text::new("Days")
+            .set("x", format!("{:.2}", PAD_LEFT + Y_OFFSET + x_length / 2.0))
+            .set("y", format!("{:.2}", PAD_TOP + y_length + X_OFFSET))
+            .set("class", "sans label")
+            .set("fill", colors.text.as_str())
+            .set("dominant-baseline", "text-after-edge")
+            .set("text-anchor", "middle");
+        body.push_str(&node.to_string());
+        let (tx, ty) = (PAD_LEFT, PAD_TOP + y_length / 2.0);
+        let node = Text::new("Contributions")
+            .set("x", format!("{tx:.2}"))
+            .set("y", format!("{ty:.2}"))
+            .set("class", "sans label")
+            .set("fill", colors.text.as_str())
+            .set("dominant-baseline", "hanging")
+            .set("text-anchor", "middle")
+            .set("transform", format!("rotate(-90, {tx:.2}, {ty:.2})"));
+        body.push_str(&node.to_string());
     }
 
-    let (pixel_width, _) = card.size.dimensions();
-    let pixel_height = (f64::from(pixel_width) * height / WIDTH).round() as u32;
+    // The line is dashed with a gap longer than itself and the dashes slide
+    // in (the reference uses 5000, which a very long line would exceed).
+    let length = points
+        .windows(2)
+        .map(|pair| (pair[1].0 - pair[0].0).hypot(pair[1].1 - pair[0].1))
+        .sum::<f64>();
+    let dash = (length * 1.5).ceil().max(5_000.0) as u64;
     let mut css = style(card.animate);
-    css.push_str(GRAPH_TEXT);
+    css.push_str(GRAPH_STYLE);
     if card.animate {
-        css.push_str(GRAPH_ANIMATION);
+        let _ = write!(
+            css,
+            ".ct-line{{stroke-dasharray:{dash};animation:dash 5s ease-in-out both}}@keyframes dash{{from{{stroke-dashoffset:{dash}}}to{{stroke-dashoffset:0}}}}{GRAPH_POINT_ANIMATION}"
+        );
     }
+
+    // The card is drawn at its natural 1200 units for the medium size.
+    let (medium_width, _) = CardSize::Medium.dimensions();
+    let (size_width, _) = card.size.dimensions();
+    let pixel_width = (f64::from(size_width) * WIDTH / f64::from(medium_width)).round() as u32;
+    let pixel_height = (f64::from(pixel_width) * height / WIDTH).round() as u32;
     Ok(Document::new()
         .set("width", pixel_width)
         .set("height", pixel_height)
-        .set("viewBox", (0, 0, 814, graph.height))
+        .set("viewBox", (0, 0, 1200, graph.height))
         .set("fill", "none")
         .add(color_comment(&card))
         .add(Style::new(css))
@@ -381,7 +297,7 @@ pub fn render_graph(
             Rectangle::new()
                 .set("x", 0.5)
                 .set("y", 0.5)
-                .set("width", 813)
+                .set("width", WIDTH - 1.0)
                 .set("height", height - 1.0)
                 .set("rx", graph.radius)
                 .set("fill", colors.background)
@@ -391,17 +307,12 @@ pub fn render_graph(
         .to_string())
 }
 
-/// Smaller type for axes that label many days.
-const GRAPH_TEXT: &str = ".tiny{font-size:9px}.micro{font-size:8px}";
+/// Text sizes and the grid, line, area and point styles of the reference
+/// (`graphStyle.ts`). Labels are 12px, 600 weight.
+const GRAPH_STYLE: &str = ".header{font-size:20px;font-weight:600}.label{font-size:12px;font-weight:600}.ct-grid{stroke-width:1px;stroke-opacity:.3;stroke-dasharray:2px}.ct-line{stroke-width:4px;stroke-linecap:butt}.ct-area{stroke:none;fill-opacity:.1}.ct-point{stroke-width:10px;stroke-linecap:round}";
 
-/// The line draws itself, the area fades in after it. Reduced-motion viewers
-/// get the finished graph from the rule in `animation_css`.
-const GRAPH_ANIMATION: &str = ".draw{stroke-dasharray:1;animation:draw 2.4s linear .2s both}@keyframes draw{from{stroke-dashoffset:1}}.dot{transform-box:fill-box;transform-origin:center;animation:pop .5s cubic-bezier(.2,.8,.2,1) both}@keyframes pop{from{opacity:0;transform:scale(0)}}.sweep{animation:fade 1.2s ease-out 1.4s both}";
-
-/// The line takes this long to draw (see `GRAPH_ANIMATION`), and each point
-/// appears when the line reaches it.
-const DRAW_MS: f64 = 2400.0;
-const DRAW_DELAY_MS: f64 = 200.0;
+/// Points slide in from the left and fade up over one second, all together.
+const GRAPH_POINT_ANIMATION: &str = ".ct-point{animation:blink 1s ease-in-out both}@keyframes blink{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}";
 
 /// A small card with a message, for requests that cannot be drawn.
 pub fn render_error(message: &str) -> String {
@@ -485,31 +396,125 @@ fn select(
         .collect())
 }
 
-/// Closest two ticks of the value axis may be, in card units.
-const MIN_TICK_SPACE: f64 = 18.0;
-
-/// Tick step and axis top for the highest daily count on a plot `plot_height`
-/// tall. The step is the smallest of 1, 2, 4, 5, 10, 20, 40, 50 ... that leaves
-/// `MIN_TICK_SPACE` between ticks, so the axis gets finer as the graph gets
-/// taller and coarser as the numbers grow (the way Chartist, which
-/// github-readme-activity-graph uses, sizes its axis). Ticks are whole
-/// numbers. With no activity at all the axis is `(1, 4)`.
-fn nice_scale(max: u32, plot_height: f64) -> (u32, u32) {
-    if max == 0 {
-        return (1, 4);
+/// A whole number without a trailing `.0`.
+fn number(value: f64) -> String {
+    if value.fract() == 0.0 {
+        format!("{}", value as i64)
+    } else {
+        format!("{value}")
     }
-    let max = u64::from(max);
-    let mut magnitude = 1_u64;
+}
+
+/// Value axis: where it starts and ends, and where its ticks are.
+struct Bounds {
+    min: f64,
+    max: f64,
+    range: f64,
+    values: Vec<f64>,
+}
+
+/// Smallest factor of `num` (Pollard's rho), as the reference computes it to
+/// find a whole-number tick step.
+fn smallest_factor(num: u64) -> u64 {
+    if num <= 1 {
+        return 1;
+    }
+    if num.is_multiple_of(2) {
+        return 2;
+    }
+    fn gcd(p: u128, q: u128) -> u128 {
+        if q == 0 { p } else { gcd(q, p % q) }
+    }
+    let n = u128::from(num);
+    let f = |x: u128| x * x + 1;
+    let (mut x1, mut x2) = (2_u128, 2_u128);
     loop {
-        for factor in [1, 2, 4, 5] {
-            let step = factor * magnitude;
-            let intervals = max.div_ceil(step);
-            if step >= max || plot_height / intervals as f64 >= MIN_TICK_SPACE {
-                let clamp = |value: u64| u32::try_from(value).unwrap_or(u32::MAX);
-                return (clamp(step), clamp(intervals * step));
+        x1 = f(x1) % n;
+        x2 = f(f(x2)) % n;
+        let divisor = gcd(x1.abs_diff(x2), n);
+        if divisor != 1 {
+            return divisor as u64;
+        }
+    }
+}
+
+/// The value axis of the reference: Chartist 0.11's `getBounds` with
+/// `onlyInteger: true`, `low: 0` and `scaleMinSpace: 20`.
+fn bounds(axis_length: f64, mut high: f64, mut low: f64, scale_min_space: f64) -> Bounds {
+    if high <= low {
+        if low == 0.0 {
+            high = 1.0;
+        } else if low < 0.0 {
+            high = 0.0;
+        } else if high > 0.0 {
+            low = 0.0;
+        } else {
+            high = 1.0;
+            low = 0.0;
+        }
+    }
+    let project = |length: f64, range: f64| length / range * axis_length;
+
+    let oom = ((high - low).abs().ln() / std::f64::consts::LN_10).floor();
+    let mut step = 10_f64.powf(oom);
+    let mut min = (low / step).floor() * step;
+    let mut max = (high / step).ceil() * step;
+    let range = max - min;
+
+    let scale_up = project(step, range) < scale_min_space;
+    let factor = smallest_factor(range as u64) as f64;
+
+    if project(1.0, range) >= scale_min_space {
+        step = 1.0;
+    } else if factor < step && project(factor, range) >= scale_min_space {
+        step = factor;
+    } else {
+        for _ in 0..1000 {
+            if scale_up && project(step, range) <= scale_min_space {
+                step *= 2.0;
+            } else if !scale_up && project(step / 2.0, range) >= scale_min_space {
+                step /= 2.0;
+                if step % 1.0 != 0.0 {
+                    step *= 2.0;
+                    break;
+                }
+            } else {
+                break;
             }
         }
-        magnitude *= 10;
+    }
+
+    const EPSILON: f64 = 2.221e-16;
+    let step = step.max(EPSILON);
+    let safe_increment = |mut value: f64, increment: f64| {
+        let before = value;
+        value += increment;
+        if before == value {
+            value *= 1.0 + if increment > 0.0 { EPSILON } else { -EPSILON };
+        }
+        value
+    };
+    while min + step <= low {
+        min = safe_increment(min, step);
+    }
+    while max - step >= high {
+        max = safe_increment(max, -step);
+    }
+
+    let mut values: Vec<f64> = Vec::new();
+    let mut tick = min;
+    while tick <= max {
+        let value = (tick * 1e8).round() / 1e8;
+        if values.last() != Some(&value) {
+            values.push(value);
+        }
+        tick = safe_increment(tick, step);
+    }
+    Bounds {
+        min,
+        max,
+        range: max - min,
+        values,
     }
 }
 
@@ -522,87 +527,90 @@ fn short_date(date: NaiveDate, with_year: bool) -> String {
     }
 }
 
-fn straight_path(points: &[(f64, f64)]) -> String {
-    let mut path = String::new();
-    for (index, (x, y)) in points.iter().enumerate() {
-        let _ = write!(path, "{}{x:.1},{y:.1} ", if index == 0 { "M" } else { "L" });
-    }
-    path.trim_end().to_owned()
+/// One piece of a drawn path.
+#[derive(Clone, Copy)]
+enum Segment {
+    Move(f64, f64),
+    Line(f64, f64),
+    Curve(f64, f64, f64, f64, f64, f64),
 }
 
-/// The path without its leading `M`, to continue from another start point.
-fn line_from_first(path: &str) -> &str {
-    path.strip_prefix('M').unwrap_or(path)
-}
-
-/// Monotone cubic curve through the points (Fritsch-Carlson). It never swings
-/// past a data point, so a smoothed line cannot dip below zero.
-fn smooth_path(points: &[(f64, f64)]) -> String {
-    let count = points.len();
-    let slope = |i: usize| (points[i + 1].1 - points[i].1) / (points[i + 1].0 - points[i].0);
-    let mut tangent = vec![0.0; count];
-    tangent[0] = slope(0);
-    tangent[count - 1] = slope(count - 2);
-    for (i, value) in tangent.iter_mut().enumerate().take(count - 1).skip(1) {
-        let (before, after) = (slope(i - 1), slope(i));
-        *value = if before * after <= 0.0 {
-            0.0
-        } else {
-            (before + after) / 2.0
+fn stringify(path: &[Segment], close: bool) -> String {
+    let mut out = String::new();
+    for segment in path {
+        let _ = match *segment {
+            Segment::Move(x, y) => write!(out, "M{x:.2},{y:.2}"),
+            Segment::Line(x, y) => write!(out, "L{x:.2},{y:.2}"),
+            Segment::Curve(a, b, c, d, x, y) => {
+                write!(out, "C{a:.2},{b:.2},{c:.2},{d:.2},{x:.2},{y:.2}")
+            }
         };
     }
-    for i in 0..count - 1 {
-        let delta = slope(i);
-        if delta == 0.0 {
-            tangent[i] = 0.0;
-            tangent[i + 1] = 0.0;
-            continue;
-        }
-        let (a, b) = (tangent[i] / delta, tangent[i + 1] / delta);
-        let size = a * a + b * b;
-        if size > 9.0 {
-            let scale = 3.0 / size.sqrt();
-            tangent[i] = scale * a * delta;
-            tangent[i + 1] = scale * b * delta;
+    if close {
+        out.push('Z');
+    }
+    out
+}
+
+fn straight_path(points: &[(f64, f64)]) -> Vec<Segment> {
+    points
+        .iter()
+        .enumerate()
+        .map(|(index, (x, y))| {
+            if index == 0 {
+                Segment::Move(*x, *y)
+            } else {
+                Segment::Line(*x, *y)
+            }
+        })
+        .collect()
+}
+
+/// Monotone cubic curve through the points (Fritsch-Carlson), as Chartist's
+/// `monotoneCubic` does. Fewer than three points stay straight.
+fn smooth_path(points: &[(f64, f64)]) -> Vec<Segment> {
+    let n = points.len();
+    if n <= 2 {
+        return straight_path(points);
+    }
+    let dx: Vec<f64> = (0..n - 1).map(|i| points[i + 1].0 - points[i].0).collect();
+    let dy: Vec<f64> = (0..n - 1).map(|i| points[i + 1].1 - points[i].1).collect();
+    let d: Vec<f64> = (0..n - 1).map(|i| dy[i] / dx[i]).collect();
+    let mut m = vec![0.0; n];
+    m[0] = d[0];
+    m[n - 1] = d[n - 2];
+    for i in 1..n - 1 {
+        if d[i] == 0.0 || d[i - 1] == 0.0 || (d[i - 1] > 0.0) != (d[i] > 0.0) {
+            m[i] = 0.0;
+        } else {
+            let value = 3.0 * (dx[i - 1] + dx[i])
+                / ((2.0 * dx[i] + dx[i - 1]) / d[i - 1] + (dx[i] + 2.0 * dx[i - 1]) / d[i]);
+            m[i] = if value.is_finite() { value } else { 0.0 };
         }
     }
-    let mut path = format!("M{:.1},{:.1}", points[0].0, points[0].1);
-    for i in 0..count - 1 {
-        let third = (points[i + 1].0 - points[i].0) / 3.0;
-        let _ = write!(
-            path,
-            " C{:.1},{:.1} {:.1},{:.1} {:.1},{:.1}",
-            points[i].0 + third,
-            points[i].1 + tangent[i] * third,
-            points[i + 1].0 - third,
-            points[i + 1].1 - tangent[i + 1] * third,
+    let mut path = vec![Segment::Move(points[0].0, points[0].1)];
+    for i in 0..n - 1 {
+        path.push(Segment::Curve(
+            points[i].0 + dx[i] / 3.0,
+            points[i].1 + m[i] * dx[i] / 3.0,
+            points[i + 1].0 - dx[i] / 3.0,
+            points[i + 1].1 - m[i + 1] * dx[i] / 3.0,
             points[i + 1].0,
             points[i + 1].1,
-        );
+        ));
     }
     path
 }
 
-/// How the label of each day on the date axis is written.
-#[derive(Clone, Copy)]
-enum LabelStyle {
-    None,
-    Date,
-    Number(&'static str),
-    Sideways,
-}
-
 /// A date written bottom to top, hanging below the axis with its end at `(x, y)`.
 fn sideways_text(svg: &mut String, (x, y): (f64, f64), fill: &str, content: &str) {
-    // The baseline sits a little right of the day, so the glyphs are centered on it.
-    let x = x + 3.0;
     let node = Text::new(content)
-        .set("x", format!("{x:.1}"))
-        .set("y", format!("{y:.1}"))
+        .set("x", format!("{x:.2}"))
+        .set("y", format!("{y:.2}"))
         .set("class", "sans micro")
         .set("fill", fill)
         .set("text-anchor", "end")
-        .set("transform", format!("rotate(-90 {x:.1} {y:.1})"));
+        .set("transform", format!("rotate(-90 {x:.2} {y:.2})"));
     svg.push_str(&node.to_string());
 }
 
@@ -638,36 +646,33 @@ fn text(
 mod tests {
     use super::*;
 
-    #[test]
-    fn scale_gets_finer_with_room_and_coarser_with_big_numbers() {
-        // The default plot is about 198 units tall: ticks at least 18 apart.
-        let tall = 198.0;
-        assert_eq!(nice_scale(0, tall), (1, 4));
-        assert_eq!(nice_scale(1, tall), (1, 1));
-        assert_eq!(nice_scale(5, tall), (1, 5));
-        assert_eq!(nice_scale(10, tall), (1, 10));
-        assert_eq!(nice_scale(12, tall), (2, 12));
-        assert_eq!(nice_scale(15, tall), (2, 16));
-        assert_eq!(nice_scale(20, tall), (2, 20));
-        assert_eq!(nice_scale(30, tall), (4, 32));
-        assert_eq!(nice_scale(40, tall), (4, 40));
-        assert_eq!(nice_scale(50, tall), (5, 50));
-        assert_eq!(nice_scale(60, tall), (10, 60));
-        assert_eq!(nice_scale(100, tall), (10, 100));
-        assert_eq!(nice_scale(101, tall), (10, 110));
-        assert_eq!(nice_scale(1_234, tall), (200, 1_400));
-        // A short plot has less room, so the same maximum gets a coarser step.
-        assert_eq!(nice_scale(20, 80.0), (5, 20));
-        assert_eq!(nice_scale(20, 400.0), (1, 20));
-        // Huge counts do not overflow.
-        assert!(nice_scale(u32::MAX, tall).0 > 1);
+    fn ticks(max: u32, axis_length: f64) -> Vec<f64> {
+        bounds(axis_length, f64::from(max), 0.0, SCALE_MIN_SPACE).values
     }
 
     #[test]
-    fn smooth_path_stays_between_neighbours() {
-        let points = [(0.0, 100.0), (10.0, 100.0), (20.0, 40.0), (30.0, 100.0)];
-        let path = smooth_path(&points);
-        // Control points at a flat segment keep its height.
-        assert!(path.starts_with("M0.0,100.0 C3.3,100.0 6.7,100.0 10.0,100.0"));
+    fn value_axis_matches_the_reference() {
+        // Height 420 gives a 270 unit plot. A peak of 20 is ticked every 2,
+        // as in github-readme-activity-graph.
+        let twenty = ticks(20, 270.0);
+        assert_eq!(twenty.first(), Some(&0.0));
+        assert_eq!(twenty.last(), Some(&20.0));
+        assert_eq!(twenty.len(), 11);
+        // Nothing to plot still gets an axis.
+        assert!(ticks(0, 270.0).len() >= 2);
+        // Ticks are whole numbers and cover the data.
+        for max in [1, 3, 7, 13, 31, 47, 99, 150, 1_234] {
+            let values = ticks(max, 270.0);
+            assert!(values.iter().all(|value| value.fract() == 0.0), "{max}");
+            assert!(*values.last().unwrap() >= f64::from(max), "{max}");
+        }
+    }
+
+    #[test]
+    fn smallest_factor_follows_the_reference() {
+        assert_eq!(smallest_factor(1), 1);
+        assert_eq!(smallest_factor(20), 2);
+        assert_eq!(smallest_factor(9), 3);
+        assert_eq!(smallest_factor(13), 13);
     }
 }
