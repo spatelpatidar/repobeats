@@ -37,14 +37,45 @@ Generated weekly by [`showcase.yml`](.github/workflows/showcase.yml) and stored 
 
 **Themes** (`theme:`), shown on the activity card
 
-<img alt="light theme" width="400" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-light.svg">
-<img alt="dark theme" width="400" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-dark.svg">
-<img alt="github-dimmed theme" width="400" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-github-dimmed.svg">
-<img alt="dracula theme" width="400" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-dracula.svg">
-<img alt="nord theme" width="400" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-nord.svg">
-<img alt="tokyo-night theme" width="400" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-tokyo-night.svg">
-<img alt="solarized-light theme" width="400" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-solarized-light.svg">
-
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img alt="light theme" width="100%" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-light.svg"><br>
+      <sub><code>light</code></sub>
+    </td>
+    <td width="50%" align="center">
+      <img alt="dark theme" width="100%" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-dark.svg"><br>
+      <sub><code>dark</code></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img alt="github-dimmed theme" width="100%" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-github-dimmed.svg"><br>
+      <sub><code>github-dimmed</code></sub>
+    </td>
+    <td width="50%" align="center">
+      <img alt="dracula theme" width="100%" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-dracula.svg"><br>
+      <sub><code>dracula</code></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img alt="nord theme" width="100%" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-nord.svg"><br>
+      <sub><code>nord</code></sub>
+    </td>
+    <td width="50%" align="center">
+      <img alt="tokyo-night theme" width="100%" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-tokyo-night.svg"><br>
+      <sub><code>tokyo-night</code></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img alt="solarized-light theme" width="100%" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-solarized-light.svg"><br>
+      <sub><code>solarized-light</code></sub>
+    </td>
+    <td width="50%"></td>
+  </tr>
+</table>
 ## Use it
 
 Add a step to a workflow. It has the same shape as `lowlighter/metrics`:
@@ -210,6 +241,7 @@ Then embed it:
 | --- | --- |
 | `GET /` | The page: a form for every parameter, a live preview, and Markdown/HTML/URL to copy. |
 | `GET /graph` | The SVG. Needs `username` (`user` also works), plus any [graph parameters](#contribution-graph), `theme`, `size` and `animate`. |
+| `GET /themes` | JSON with the graph colors of every theme (used by the params page). |
 | `GET /healthz` | `ok`. |
 
 Errors are also SVG cards, with a status code: `400` for a bad parameter, `404` unknown user, `429` GitHub rate limit, `503` no token set on the server, `502` other GitHub failures. Successful responses are cached for 30 minutes (`Cache-Control: public, max-age=1800`). One GitHub request fetches a whole year for a user, so every `days` or `from`/`to` choice for that user is answered from the same cached data.

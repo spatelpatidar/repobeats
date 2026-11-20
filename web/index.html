@@ -1,254 +1,2001 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Repobeats Graph</title>
-<meta name="description" content="Build a contribution graph for any GitHub profile and embed it as an SVG.">
-<style>
-  :root {
-    --bg: #ffffff; --panel: #f6f8fa; --border: #d0d7de; --text: #1f2328; --muted: #59636e;
-    --accent: #0969da; --accent-text: #ffffff; --danger: #cf222e;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e;
-      --accent: #2f81f7; --accent-text: #ffffff; --danger: #f85149;
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Repobeats Graph</title>
+        <meta
+            name="description"
+            content="Build a contribution graph for any GitHub profile and embed it as an SVG."
+        />
+        <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M1 12l4-5 3 3 4-6 3 4' fill='none' stroke='%232156d9' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+        <!-- Set the color theme before first paint to avoid a flash (dark unless the visitor chose light) -->
+        <script>
+            (function () {
+                var theme = 'dark';
+                try {
+                    if (localStorage.getItem('theme') === 'light') theme = 'light';
+                } catch (e) {}
+                document.documentElement.dataset.theme = theme;
+            })();
+        </script>
+        <!-- Fonts (all SIL Open Font License) -->
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-serif@5.3.0/300.css"
+        />
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-serif@5.3.0/300-italic.css"
+        />
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-serif@5.3.0/400.css"
+        />
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/@fontsource/ia-writer-quattro@5.3.0/400.css"
+        />
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/@fontsource/ia-writer-quattro@5.3.0/400-italic.css"
+        />
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/@fontsource/ia-writer-quattro@5.3.0/700.css"
+        />
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/@fontsource/lilex@5.3.0/400.css"
+        />
+        <!-- Layout and styles adapted from github-readme-activity-graph (MIT, (c) Ashutosh Dwivedi). -->
+        <style>
+/* ---------- Tokens ---------- */
+
+:root {
+    --font-serif: 'IBM Plex Serif', Georgia, serif;
+    --font-body: 'iA Writer Quattro', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'Lilex', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --text: #404040;
+    --heading: #0a0a0a;
+    --muted: #737373;
+    --faint: #d4d4d4;
+    --border: #d4d4d4;
+    --border-strong: #a3a3a3;
+    --focus: #1e69f6;
+
+    --btn-primary: #2156d9;
+    --btn-primary-border: rgba(30, 105, 246, 0.6);
+    --btn-primary-inset: #0b3a9e;
+    --btn-secondary: #ffffff;
+    --btn-secondary-text: #171717;
+    --btn-secondary-border: #d4d4d4;
+    --btn-secondary-inset: #e5e5e5;
+
+    --success: #15803d;
+    --danger: #b42318;
+
+    color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+    --bg: #111216;
+    --surface: #16181b;
+    --text: #d4d4d4;
+    --heading: #fafafa;
+    --muted: #a3a3a3;
+    --faint: #404040;
+    --border: rgba(64, 64, 64, 0.6);
+    --border-strong: #525252;
+
+    --btn-primary: #2152d1;
+    --btn-primary-border: rgba(74, 132, 255, 0.4);
+    --btn-primary-inset: #053794;
+    --btn-secondary: #262626;
+    --btn-secondary-text: #f5f5f5;
+    --btn-secondary-border: rgba(82, 82, 82, 0.4);
+    --btn-secondary-inset: #2e2e2e;
+
+    --success: #4ade80;
+    --danger: #f97066;
+
+    color-scheme: dark;
+}
+
+/* ---------- Base ---------- */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+}
+
+body {
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font: 400 16px/1.5 var(--font-body);
+    -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+    margin: 0;
+    color: var(--heading);
+    font-family: var(--font-serif);
+    font-weight: 300;
+}
+
+p {
+    margin: 0;
+}
+
+a {
+    color: inherit;
+}
+
+code,
+textarea {
+    font-family: var(--font-mono);
+}
+
+:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+.est {
+    margin-left: 0.25rem;
+    color: var(--faint);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 300;
+    white-space: nowrap;
+}
+
+.hint,
+.tagline {
+    color: var(--muted);
+    font-style: italic;
+    font-size: 14px;
+    line-height: 20px;
+}
+
+/* ---------- Top bar ---------- */
+
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 32px;
+    padding: 0 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+}
+
+.topbar__brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    color: var(--heading);
+}
+
+.topbar__nav {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.topbar__nav a {
+    color: var(--muted);
+    text-decoration: none;
+}
+
+.topbar__nav a:hover {
+    color: var(--heading);
+}
+
+.topbar__icon {
+    display: inline-flex;
+}
+
+/* ---------- Column ---------- */
+
+.column {
+    max-width: 1024px;
+    margin: 0 auto;
+    min-height: calc(100vh - 32px);
+    display: flex;
+    flex-direction: column;
+}
+
+.column > * + * {
+    border-top: 1px solid var(--border);
+}
+
+@media (min-width: 1056px) {
+    .column {
+        border-left: 1px solid var(--border);
+        border-right: 1px solid var(--border);
     }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  }
-  main { max-width: 1120px; margin: 0 auto; padding: 32px 16px 64px; }
-  h1 { font-size: 24px; margin: 0 0 4px; }
-  .lead { color: var(--muted); margin: 0 0 24px; }
-  .layout { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 24px; align-items: start; }
-  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
-  form { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
-  fieldset { border: 0; margin: 0 0 16px; padding: 0; min-width: 0; }
-  legend { font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 0; margin-bottom: 8px; }
-  label { display: block; font-size: 13px; margin-bottom: 8px; }
-  label span { display: block; color: var(--muted); margin-bottom: 2px; }
-  input[type=text], input[type=number], input[type=date], select {
-    width: 100%; padding: 6px 8px; font: inherit; color: var(--text);
-    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
-  }
-  input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
-  .checks label { display: flex; align-items: center; gap: 6px; margin: 0; }
-  .color { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-  .color span { flex: 0 0 96px; margin: 0; }
-  .color input[type=text] { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-  .swatch { width: 28px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: none; cursor: pointer; }
-  .output { min-width: 0; }
-  .preview {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px;
-    min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-    background-image: repeating-conic-gradient(rgba(127,127,127,.08) 0% 25%, transparent 0% 50%);
-    background-size: 16px 16px;
-  }
-  .preview img { max-width: 100%; height: auto; display: block; }
-  .status { font-size: 13px; color: var(--muted); min-height: 20px; }
-  .status.error { color: var(--danger); }
-  .snippet { margin-top: 20px; }
-  .snippet h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 6px; }
-  .snippet-box { display: flex; gap: 8px; align-items: stretch; }
-  .snippet-box code {
-    flex: 1; min-width: 0; overflow-x: auto; white-space: pre; padding: 8px 10px;
-    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
-    font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  }
-  button {
-    font: inherit; font-size: 13px; padding: 0 14px; border-radius: 6px; cursor: pointer;
-    border: 1px solid var(--border); background: var(--panel); color: var(--text);
-  }
-  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
-  .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
-  .reset { margin-top: 4px; padding: 6px 12px; }
-</style>
-</head>
-<body>
-<main>
-  <h1>Repobeats Graph</h1>
-  <p class="lead">Daily contributions of a GitHub profile as a line graph. Enter a username, set the options, copy the link.</p>
+}
 
-  <div class="layout">
-    <form id="form" autocomplete="off">
-      <fieldset>
-        <legend>GitHub profile</legend>
-        <label><span>Username</span><input type="text" name="username" value="spatelpatidar" spellcheck="false" autocapitalize="none"></label>
-      </fieldset>
+/* ---------- Intro ---------- */
 
-      <fieldset>
-        <legend>Data</legend>
-        <label><span>Days (1 to 365)</span><input type="number" name="days" min="1" max="365" placeholder="31"></label>
-        <div class="row">
-          <label><span>From</span><input type="date" name="from"></label>
-          <label><span>To</span><input type="date" name="to"></label>
-        </div>
-        <p class="hint">A From/To range replaces Days. Both are needed.</p>
-      </fieldset>
+.intro {
+    padding: 48px 16px 40px;
+}
 
-      <fieldset>
-        <legend>Look</legend>
-        <div class="row">
-          <label><span>Theme</span>
-            <select name="theme">
-              <option value="">light</option>
-              <option>dark</option><option>github-dimmed</option><option>dracula</option>
-              <option>nord</option><option>tokyo-night</option><option>solarized-light</option>
-            </select>
-          </label>
-          <label><span>Size</span>
-            <select name="size"><option value="">medium</option><option>small</option><option>large</option></select>
-          </label>
-        </div>
-        <div class="row">
-          <label><span>Height (200 to 600)</span><input type="number" name="height" min="200" max="600" placeholder="420"></label>
-          <label><span>Corner radius (0 to 16)</span><input type="number" name="radius" min="0" max="16" placeholder="0"></label>
-        </div>
-        <label><span>X-axis labels</span>
-          <select name="labels">
-            <option value="">day numbers (like the reference)</option>
-            <option value="date">dates (Nov 9)</option>
-            <option value="number">day numbers (14, 15)</option>
-            <option value="sideways">dates sideways</option>
-            <option value="none">none</option>
-          </select>
-        </label>
-        <label><span>Custom title</span><input type="text" name="custom_title" maxlength="64" placeholder="Your Name's Contribution Graph"></label>
-        <div class="checks">
-          <label><input type="checkbox" name="area"> Fill area</label>
-          <label><input type="checkbox" name="grid" data-default="on"> Grid</label>
-          <label><input type="checkbox" name="smooth" data-default="on"> Smooth line</label>
-          <label><input type="checkbox" name="animate" data-default="on"> Animate</label>
-          <label><input type="checkbox" name="hide_title"> Hide title</label>
-          <label><input type="checkbox" name="hide_border"> Hide border</label>
-          <label><input type="checkbox" name="hide_axis_titles"> Hide axis titles</label>
-        </div>
-      </fieldset>
+.intro h1 {
+    font-size: clamp(26px, 4vw, 34px);
+    line-height: 1.2;
+}
 
-      <fieldset>
-        <legend>Colors (hex, empty uses the theme)</legend>
-        <div id="colors"></div>
-        <button type="button" class="reset" id="reset">Reset all</button>
-      </fieldset>
-    </form>
+.intro .tagline {
+    margin-top: 8px;
+    max-width: 52ch;
+}
 
-    <div class="output">
-      <div class="preview"><img id="img" alt="Contribution graph preview"><div class="status" id="status" role="status"></div></div>
+.build {
+    display: flex;
+    gap: 8px;
+    margin-top: 28px;
+    max-width: 560px;
+}
 
-      <div class="snippet">
-        <h2>Markdown</h2>
-        <div class="snippet-box"><code id="md"></code><button class="primary" data-copy="md">Copy</button></div>
-      </div>
-      <div class="snippet">
-        <h2>HTML</h2>
-        <div class="snippet-box"><code id="html"></code><button data-copy="html">Copy</button></div>
-      </div>
-      <div class="snippet">
-        <h2>URL</h2>
-        <div class="snippet-box"><code id="url"></code><button data-copy="url">Copy</button></div>
-      </div>
-    </div>
-  </div>
-</main>
+.field {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: var(--surface);
+}
 
-<script>
-(function () {
-  var COLORS = [
-    ["bg_color", "Background"], ["border_color", "Border"], ["color", "Text"],
-    ["title_color", "Title"], ["line", "Line"], ["point", "Points"], ["area_color", "Area"]
-  ];
-  var form = document.getElementById("form");
-  var img = document.getElementById("img");
-  var status = document.getElementById("status");
-  var colors = document.getElementById("colors");
+.field:focus-within {
+    border-color: var(--focus);
+    box-shadow: 0 0 0 1px var(--focus);
+}
 
-  COLORS.forEach(function (c) {
-    var row = document.createElement("div");
-    row.className = "color";
-    row.innerHTML = '<span></span><input type="text" name="' + c[0] + '" maxlength="11" spellcheck="false" placeholder="theme">' +
-      '<input type="color" class="swatch" aria-label="Pick ' + c[1] + ' color" value="#888888">';
-    row.firstChild.textContent = c[1];
-    colors.appendChild(row);
-    var text = row.querySelector("input[type=text]");
-    var swatch = row.querySelector("input[type=color]");
-    swatch.addEventListener("input", function () { text.value = swatch.value.slice(1); update(); });
-  });
+.field__prefix {
+    padding-left: 10px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 13px;
+}
 
-  function query() {
-    var q = new URLSearchParams();
-    var data = new FormData(form);
-    var username = (data.get("username") || "").trim();
-    if (username) q.set("username", username);
-    ["days", "from", "to", "labels", "theme", "size", "height", "radius", "custom_title"].forEach(function (name) {
-      var v = (data.get(name) || "").trim();
-      if (v) q.set(name, v);
+.field input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px 8px 2px;
+    border: 0;
+    background: transparent;
+    color: var(--heading);
+    font: 400 13px/20px var(--font-mono);
+    outline: none;
+}
+
+.field input::placeholder {
+    color: var(--muted);
+    opacity: 0.6;
+}
+
+.status {
+    min-height: 20px;
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.status[data-tone='error'] {
+    color: var(--danger);
+}
+
+/* ---------- Buttons ---------- */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 4px;
+    font: 400 13px/20px var(--font-body);
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow:
+        var(--inset) 0 -2px 0 0 inset,
+        rgba(0, 0, 0, 0.2) 0 1px 3px 0;
+    transition:
+        filter 0.15s ease,
+        transform 0.05s ease;
+}
+
+.btn:hover:not(:disabled) {
+    filter: brightness(1.1);
+}
+
+.btn:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow: var(--inset) 0 -1px 0 0 inset;
+}
+
+.btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.btn--primary {
+    --inset: var(--btn-primary-inset);
+    background: var(--btn-primary);
+    border: 1px solid var(--btn-primary-border);
+    color: #fff;
+}
+
+.btn--secondary {
+    --inset: var(--btn-secondary-inset);
+    background: var(--btn-secondary);
+    border: 1px solid var(--btn-secondary-border);
+    color: var(--btn-secondary-text);
+}
+
+.btn[data-busy='true'] {
+    cursor: progress;
+    opacity: 0.8;
+}
+
+/* ---------- Builder ---------- */
+
+.builder {
+    display: grid;
+    grid-template-columns: minmax(300px, 2fr) 3fr;
+}
+
+.builder > * {
+    padding: 32px 16px;
+}
+
+.builder > * + * {
+    border-left: 1px solid var(--border);
+}
+
+.builder h2 {
+    font-size: 18px;
+    line-height: 1.2;
+}
+
+.builder .hint {
+    margin-top: 4px;
+    margin-bottom: 20px;
+}
+
+.control {
+    display: block;
+}
+
+.control__label {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.colors {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.swatch {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    cursor: pointer;
+}
+
+.swatch:hover {
+    border-color: var(--border-strong);
+}
+
+.swatch input[type='color'] {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: none;
+    cursor: pointer;
+}
+
+.swatch input[type='color']::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.swatch input[type='color']::-webkit-color-swatch {
+    border: 0;
+    border-radius: 3px;
+}
+
+.swatch input[type='color']::-moz-color-swatch {
+    border: 0;
+    border-radius: 3px;
+}
+
+.swatch__text {
+    min-width: 0;
+}
+
+.swatch .control__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.swatch--edited {
+    border-color: var(--border-strong);
+}
+
+.swatch--edited .control__label::after {
+    content: ' •';
+    color: var(--focus);
+}
+
+.swatch--transparent input[type='color'] {
+    background: repeating-conic-gradient(#8885 0% 25%, transparent 0% 50%) 50% / 8px 8px;
+}
+
+.swatch--transparent input[type='color']::-webkit-color-swatch {
+    opacity: 0;
+}
+
+.swatch--transparent input[type='color']::-moz-color-swatch {
+    opacity: 0;
+}
+
+.swatch code {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--heading);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.toggles {
+    display: grid;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.toggle input {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    accent-color: var(--btn-primary);
+}
+
+/* ---------- Control groups ---------- */
+
+.group {
+    display: grid;
+    gap: 10px;
+    padding: 16px 0;
+    border-top: 1px dashed var(--border);
+}
+
+.group:first-of-type {
+    padding-top: 0;
+    border-top: 0;
+}
+
+.group__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.group__title {
+    color: var(--heading);
+    font-family: var(--font-serif);
+    font-weight: 300;
+    font-size: 15px;
+}
+
+.link-button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font: 400 12px/16px var(--font-body);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: var(--faint);
+    cursor: pointer;
+}
+
+.link-button:hover {
+    color: var(--heading);
+    text-decoration-color: currentColor;
+}
+
+.control {
+    display: grid;
+    gap: 6px;
+}
+
+.control output {
+    color: var(--heading);
+    font-family: var(--font-mono);
+}
+
+.input {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--heading);
+    font: 400 13px/20px var(--font-body);
+}
+
+.input:focus {
+    outline: none;
+    border-color: var(--focus);
+    box-shadow: 0 0 0 1px var(--focus);
+}
+
+.input:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.input::placeholder {
+    color: var(--muted);
+    opacity: 0.7;
+}
+
+.input[type='date'] {
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.dates {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.dates[hidden],
+.control[hidden] {
+    display: none;
+}
+
+.field-hint {
+    min-height: 0;
+    color: var(--danger);
+    font-size: 12px;
+}
+
+.field-hint:empty {
+    display: none;
+}
+
+/* Range sliders */
+input[type='range'] {
+    --fill: 50%;
+    width: 100%;
+    height: 16px;
+    margin: 2px 0;
+    background: transparent;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(
+        to right,
+        var(--btn-primary) var(--fill),
+        var(--border-strong) var(--fill)
+    );
+}
+
+input[type='range']::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border-strong);
+}
+
+input[type='range']::-moz-range-progress {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--btn-primary);
+}
+
+input[type='range']::-webkit-slider-thumb {
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+    border: 1px solid var(--border-strong);
+    border-radius: 50%;
+    background: var(--heading);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    -webkit-appearance: none;
+}
+
+input[type='range']::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--border-strong);
+    border-radius: 50%;
+    background: var(--heading);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+input[type='range']:focus-visible {
+    outline: none;
+}
+
+input[type='range']:focus-visible::-webkit-slider-thumb {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+/* Segmented switch */
+.segmented {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 2px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--bg);
+}
+
+.segmented label {
+    position: relative;
+    cursor: pointer;
+}
+
+.segmented input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.segmented span {
+    display: block;
+    padding: 4px 8px;
+    border-radius: 3px;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+}
+
+.segmented input:checked + span {
+    background: var(--btn-secondary);
+    color: var(--btn-secondary-text);
+    box-shadow:
+        var(--btn-secondary-inset) 0 -1px 0 0 inset,
+        rgba(0, 0, 0, 0.15) 0 1px 2px 0;
+}
+
+.segmented input:focus-visible + span {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+}
+
+/* ---------- Theme dropdown ---------- */
+
+.dropdown {
+    position: relative;
+}
+
+.dropdown__button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--heading);
+    font: 400 13px/20px var(--font-body);
+    text-align: left;
+    cursor: pointer;
+}
+
+.dropdown__button:hover {
+    border-color: var(--muted);
+}
+
+.dropdown__button[aria-expanded='true'] {
+    border-color: var(--focus);
+    box-shadow: 0 0 0 1px var(--focus);
+}
+
+.dropdown__value {
+    flex: 1;
+}
+
+.dropdown__chevron {
+    width: 6px;
+    height: 6px;
+    margin-right: 2px;
+    border-right: 1.5px solid var(--muted);
+    border-bottom: 1.5px solid var(--muted);
+    transform: translateY(-2px) rotate(45deg);
+    transition: transform 0.15s ease;
+}
+
+.dropdown__button[aria-expanded='true'] .dropdown__chevron {
+    transform: translateY(1px) rotate(-135deg);
+}
+
+.dropdown__list {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 300px;
+    margin: 0;
+    padding: 4px;
+    overflow-y: auto;
+    list-style: none;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: var(--surface);
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.35),
+        0 1px 3px rgba(0, 0, 0, 0.2);
+    outline: none;
+    scrollbar-width: thin;
+}
+
+.dropdown__list[hidden] {
+    display: none;
+}
+
+.dropdown__list li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 8px;
+    border-radius: 3px;
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--text);
+    cursor: pointer;
+}
+
+.dropdown__list li.is-active {
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+    color: var(--heading);
+}
+
+.dropdown__list li[aria-selected='true'] {
+    color: var(--heading);
+}
+
+.dropdown__list li[aria-selected='true']::after {
+    content: '';
+    width: 8px;
+    height: 4px;
+    margin-left: auto;
+    border-left: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: translateY(-2px) rotate(-45deg);
+}
+
+/* Small preview of a theme: background with a line and a point */
+.theme-chip {
+    position: relative;
+    flex: none;
+    width: 22px;
+    height: 14px;
+    border: 1px solid var(--border-strong);
+    border-radius: 3px;
+    background: var(--chip-bg, transparent);
+    overflow: hidden;
+}
+
+.theme-chip::before {
+    content: '';
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    top: 50%;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--chip-line, currentColor);
+    transform: rotate(-12deg);
+}
+
+.theme-chip::after {
+    content: '';
+    position: absolute;
+    right: 4px;
+    top: 3px;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--chip-point, currentColor);
+}
+
+/* ---------- Preview ---------- */
+
+.output__sticky {
+    position: sticky;
+    top: 56px;
+}
+
+.preview {
+    position: relative;
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1200 / 420;
+    border: 1px dashed var(--border-strong);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.preview[data-state='ready'],
+.preview[data-state='refreshing'] {
+    border-style: solid;
+    border-color: var(--border);
+}
+
+.preview img {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.preview img[hidden],
+.preview[data-state='ready'] .preview__empty,
+.preview[data-state='refreshing'] .preview__empty {
+    display: none;
+}
+
+.preview__empty {
+    padding: 16px;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+}
+
+.preview__empty em {
+    color: var(--text);
+}
+
+.preview[data-state='refreshing'] img {
+    opacity: 0.55;
+    transition: opacity 0.2s ease;
+}
+
+.preview[data-state='loading']::after,
+.preview[data-state='refreshing']::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        color-mix(in srgb, var(--text) 8%, transparent) 50%,
+        transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.2s linear infinite;
+}
+
+@keyframes shimmer {
+    from {
+        background-position: 200% 0;
+    }
+    to {
+        background-position: -200% 0;
+    }
+}
+
+.copy {
+    margin-top: 20px;
+}
+
+.copy__row {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+    align-items: stretch;
+}
+
+.copy textarea {
+    flex: 1;
+    min-width: 0;
+    resize: none;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--heading);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.copy textarea::placeholder {
+    color: var(--muted);
+}
+
+#copy-button[data-copied='true'] {
+    color: var(--success);
+}
+
+/* ---------- Links ---------- */
+
+.links {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.links__item {
+    display: block;
+    padding: 16px;
+    text-decoration: none;
+}
+
+.links__item + .links__item {
+    border-left: 1px solid var(--border);
+}
+
+.links__item h3 {
+    font-size: 17px;
+    line-height: 1.3;
+}
+
+.links__item h3 span {
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.links__item p {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.links__item:hover h3 {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+}
+
+/* ---------- Footer ---------- */
+
+.footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 4px 8px;
+    margin-top: auto;
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+}
+
+.footer a {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: var(--faint);
+}
+
+.footer a:hover {
+    text-decoration-color: currentColor;
+}
+
+.footer .dot {
+    opacity: 0.4;
+}
+
+.theme-toggle {
+    padding: 0 4px;
+    border: 0;
+    border-radius: 3px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.theme-toggle:hover {
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+/* ---------- Small screens ---------- */
+
+@media (max-width: 760px) {
+    .builder,
+    .links {
+        grid-template-columns: 1fr;
+    }
+
+    .links__item + .links__item {
+        border-left: 0;
+        border-top: 1px solid var(--border);
+    }
+
+    .footer .dot {
+        display: none;
+    }
+
+    .footer__credit {
+        order: 1;
+        flex-basis: 100%;
+        text-align: center;
+    }
+
+    /* Phones: preview first and pinned under the top bar while scrolling the controls */
+    .output,
+    .output__sticky {
+        display: contents;
+    }
+
+    .output__sticky > h2 {
+        order: 0;
+        padding: 28px 16px 0;
+    }
+
+    .output__sticky > .hint {
+        order: 0;
+        margin: 4px 16px 12px;
+    }
+
+    .preview {
+        order: 1;
+        position: sticky;
+        top: 40px;
+        z-index: 5;
+        margin: 0 16px;
+        background: var(--bg);
+        box-shadow: 0 0 0 8px var(--bg);
+    }
+
+    .controls {
+        order: 2;
+        margin-top: 24px;
+        border-top: 1px solid var(--border);
+    }
+
+    .copy {
+        order: 3;
+        margin: 0;
+        padding: 20px 16px 28px;
+        border-top: 1px solid var(--border);
+    }
+
+    .build {
+        flex-direction: column;
+    }
+
+    .copy__row {
+        flex-direction: column;
+    }
+
+    .intro {
+        padding-top: 32px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
+select.input { appearance: auto; }
+.toggles { grid-template-columns: 1fr 1fr; }
+@media (max-width: 480px) { .toggles { grid-template-columns: 1fr; } }
+        </style>
+    </head>
+
+    <body>
+        <header class="topbar">
+            <a class="topbar__brand" href="./">
+                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M1 12l4-5 3 3 4-6 3 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span>Repobeats</span>
+            </a>
+            <nav class="topbar__nav" aria-label="Project">
+                <a href="https://github.com/spatelpatidar/repobeats#contribution-graph">Docs</a>
+                <a href="https://github.com/spatelpatidar/repobeats#graph-server">Self-host</a>
+                <a
+                    class="topbar__icon"
+                    href="https://github.com/spatelpatidar/repobeats"
+                    aria-label="GitHub repository"
+                >
+                    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                        <path
+                            fill="currentColor"
+                            d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
+                        />
+                    </svg>
+                </a>
+            </nav>
+        </header>
+
+        <main class="column">
+            <!-- Intro -->
+            <section class="intro">
+                <h1>
+                    Repobeats Graph
+                </h1>
+                <p class="tagline">
+                    Daily contributions of any GitHub profile as a line graph, ready to drop into
+                    your profile README.
+                </p>
+
+                <form class="build" id="build-form" autocomplete="off">
+                    <label class="sr-only" for="username">GitHub username</label>
+                    <div class="field">
+                        <span class="field__prefix" aria-hidden="true">github.com/</span>
+                        <input
+                            type="text"
+                            id="username"
+                            name="username"
+                            placeholder="your-username"
+                            spellcheck="false"
+                            autocapitalize="off"
+                            required
+                        />
+                    </div>
+                    <button type="submit" class="btn btn--primary" id="build-button">
+                        Build graph
+                    </button>
+                </form>
+                <p class="status" id="status" role="status" aria-live="polite"></p>
+            </section>
+
+            <!-- Builder: controls + preview -->
+            <section class="builder">
+                <div class="controls" aria-label="Customize">
+                    <h2>Customize <span class="est">01</span></h2>
+                    <p class="hint">Start from a theme, then adjust anything.</p>
+
+                    <!-- Theme -->
+                    <div class="group">
+                        <span class="control__label" id="theme-label">Theme</span>
+                        <div class="dropdown" id="theme-dropdown">
+                            <button
+                                type="button"
+                                class="dropdown__button"
+                                id="theme-button"
+                                aria-haspopup="listbox"
+                                aria-expanded="false"
+                                aria-labelledby="theme-label theme-button"
+                            >
+                                <span class="theme-chip" aria-hidden="true"></span>
+                                <span class="dropdown__value">Default</span>
+                                <span class="dropdown__chevron" aria-hidden="true"></span>
+                            </button>
+                            <ul
+                                class="dropdown__list"
+                                id="theme-list"
+                                role="listbox"
+                                tabindex="-1"
+                                aria-labelledby="theme-label"
+                                hidden
+                            ></ul>
+                        </div>
+                    </div>
+
+                    <!-- Colors -->
+                    <div class="group">
+                        <div class="group__head">
+                            <span class="group__title">Colors</span>
+                            <button type="button" class="link-button" id="reset-colors" hidden>
+                                Reset to theme
+                            </button>
+                        </div>
+                        <div class="colors">
+                            <label class="swatch">
+                                <input type="color" data-param="bg_color" />
+                                <span class="swatch__text">
+                                    <span class="control__label">Background</span>
+                                    <code></code>
+                                </span>
+                            </label>
+                            <label class="swatch">
+                                <input type="color" data-param="border_color" />
+                                <span class="swatch__text">
+                                    <span class="control__label">Border</span>
+                                    <code></code>
+                                </span>
+                            </label>
+                            <label class="swatch">
+                                <input type="color" data-param="title_color" />
+                                <span class="swatch__text">
+                                    <span class="control__label">Title</span>
+                                    <code></code>
+                                </span>
+                            </label>
+                            <label class="swatch">
+                                <input type="color" data-param="color" />
+                                <span class="swatch__text">
+                                    <span class="control__label">Text &amp; grid</span>
+                                    <code></code>
+                                </span>
+                            </label>
+                            <label class="swatch">
+                                <input type="color" data-param="line" />
+                                <span class="swatch__text">
+                                    <span class="control__label">Line</span>
+                                    <code></code>
+                                </span>
+                            </label>
+                            <label class="swatch">
+                                <input type="color" data-param="point" />
+                                <span class="swatch__text">
+                                    <span class="control__label">Points</span>
+                                    <code></code>
+                                </span>
+                            </label>
+                            <label class="swatch">
+                                <input type="color" data-param="area_color" />
+                                <span class="swatch__text">
+                                    <span class="control__label">Area</span>
+                                    <code></code>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Title -->
+                    <div class="group">
+                        <span class="group__title">Title</span>
+                        <label class="toggle">
+                            <input type="checkbox" id="hide_title" />
+                            <span>Hide title</span>
+                        </label>
+                        <label class="control">
+                            <span class="control__label">Custom title</span>
+                            <input
+                                type="text"
+                                class="input"
+                                id="custom_title"
+                                maxlength="80"
+                                placeholder="&lt;Your name&gt;'s Contribution Graph"
+                            />
+                        </label>
+                    </div>
+
+                    <!-- Date range -->
+                    <div class="group">
+                        <span class="group__title">Date range</span>
+                        <div class="segmented" role="radiogroup" aria-label="Date range">
+                            <label>
+                                <input type="radio" name="range" value="days" checked />
+                                <span>Last N days</span>
+                            </label>
+                            <label>
+                                <input type="radio" name="range" value="dates" />
+                                <span>Custom dates</span>
+                            </label>
+                        </div>
+                        <label class="control" data-range="days">
+                            <span class="control__label">
+                                Days <output id="days-value">31</output>
+                            </span>
+                            <input type="range" id="days" min="1" max="365" value="31" />
+                        </label>
+                        <div class="dates" data-range="dates" hidden>
+                            <label class="control">
+                                <span class="control__label">From</span>
+                                <input type="date" class="input" id="from" />
+                            </label>
+                            <label class="control">
+                                <span class="control__label">To</span>
+                                <input type="date" class="input" id="to" />
+                            </label>
+                        </div>
+                        <p class="field-hint" id="range-hint"></p>
+                    </div>
+
+                    <!-- Layout -->
+                    <div class="group">
+                        <span class="group__title">Layout</span>
+                        <label class="control">
+                            <span class="control__label">
+                                Height <output id="height-value">420</output>px
+                            </span>
+                            <input
+                                type="range"
+                                id="height"
+                                min="200"
+                                max="600"
+                                step="10"
+                                value="420"
+                            />
+                        </label>
+                        <label class="control">
+                            <span class="control__label">
+                                Corner radius <output id="radius-value">0</output>px
+                            </span>
+                            <input type="range" id="radius" min="0" max="16" value="0" />
+                        </label>
+                        <label class="control">
+                            <span class="control__label">Day labels</span>
+                            <select class="input" id="labels">
+                                <option value="">Day numbers</option>
+                                <option value="date">Dates (Nov 9)</option>
+                                <option value="sideways">Dates, sideways</option>
+                                <option value="none">None</option>
+                            </select>
+                        </label>
+                        <div class="toggles">
+                            <label class="toggle">
+                                <input type="checkbox" id="area" checked />
+                                <span>Fill area under the line</span>
+                            </label>
+                            <label class="toggle">
+                                <input type="checkbox" id="grid" checked />
+                                <span>Show grid</span>
+                            </label>
+                            <label class="toggle">
+                                <input type="checkbox" id="smooth" checked />
+                                <span>Smooth line</span>
+                            </label>
+                            <label class="toggle">
+                                <input type="checkbox" id="animate" checked />
+                                <span>Animate</span>
+                            </label>
+                            <label class="toggle">
+                                <input type="checkbox" id="hide_axis_titles" />
+                                <span>Hide axis titles</span>
+                            </label>
+                            <label class="toggle">
+                                <input type="checkbox" id="hide_border" />
+                                <span>Hide border</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="output">
+                    <div class="output__sticky">
+                        <h2>Preview <span class="est">02</span></h2>
+                        <p class="hint">Exactly what will render in your README.</p>
+
+                        <div class="preview" id="preview" data-state="empty">
+                            <img id="preview-image" alt="" hidden />
+                            <p class="preview__empty">
+                                Enter a username and press <em>Build graph</em>.
+                            </p>
+                        </div>
+
+                        <div class="copy">
+                            <div class="group__head">
+                                <label class="control__label" for="markdown">Markdown</label>
+                                <a
+                                    class="link-button"
+                                    id="open-link"
+                                    href="#"
+                                    target="_blank"
+                                    rel="noopener"
+                                    hidden
+                                    >Open image ↗</a
+                                >
+                            </div>
+                            <div class="copy__row">
+                                <textarea
+                                    id="markdown"
+                                    rows="4"
+                                    readonly
+                                    placeholder="Your README snippet will appear here."
+                                ></textarea>
+                                <button
+                                    type="button"
+                                    class="btn btn--secondary"
+                                    id="copy-button"
+                                    disabled
+                                >
+                                    Copy
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Links -->
+            <section class="links">
+                <a class="links__item" href="https://github.com/spatelpatidar/repobeats#contribution-graph">
+                    <h3>Customization <span aria-hidden="true">↗</span></h3>
+                    <p>Every URL option: days, dates, labels, colors, height.</p>
+                </a>
+                <a class="links__item" href="https://github.com/spatelpatidar/repobeats#contribution-graph">
+                    <h3>GitHub Action <span aria-hidden="true">↗</span></h3>
+                    <p>Write the graph into your profile repo on a schedule.</p>
+                </a>
+                <a class="links__item" href="https://github.com/spatelpatidar/repobeats#graph-server">
+                    <h3>Self-host <span aria-hidden="true">↗</span></h3>
+                    <p>Run your own server, for free on Render.</p>
+                </a>
+            </section>
+
+            <footer class="footer">
+                <span>Repobeats</span>
+                <span class="dot" aria-hidden="true">•</span>
+                <a href="https://github.com/spatelpatidar/repobeats">GitHub</a>
+                <a href="https://github.com/spatelpatidar/repobeats/issues">Issues</a>
+                <span class="dot" aria-hidden="true">•</span>
+                <span class="footer__credit"
+                    >Graph and page style adapted from
+                    <a href="https://github.com/Ashutosh00710/github-readme-activity-graph" rel="noopener">github-readme-activity-graph</a>
+                    (MIT). Design inspired by <a href="https://zed.dev" rel="noopener">zed.dev</a></span
+                >
+                <span class="dot" aria-hidden="true">•</span>
+                <button type="button" class="theme-toggle" id="theme-toggle"></button>
+            </footer>
+        </main>
+
+        <script>
+const REPO = 'https://github.com/spatelpatidar/repobeats';
+
+// Filled from /themes when the page loads (the server owns the colors).
+// Each entry: { id, name, bg, border, title, color, line, point, area } as hex
+// without '#', or '00000000' for transparent.
+let THEMES = [];
+
+const THEME_NAMES = {
+    'github-dimmed': 'GitHub Dimmed',
+    'tokyo-night': 'Tokyo Night',
+    'solarized-light': 'Solarized Light',
+};
+
+// URL parameter -> theme field, for the seven color options
+const COLOR_PARAMS = {
+    bg_color: 'bg',
+    border_color: 'border',
+    title_color: 'title',
+    color: 'color',
+    line: 'line',
+    point: 'point',
+    area_color: 'area',
+};
+const DEFAULT_DAYS = 31;
+const DEFAULT_HEIGHT = 420;
+const MAX_DAYS = 365;
+
+const $ = (id) => document.getElementById(id);
+const el = {
+    form: $('build-form'),
+    username: $('username'),
+    buildButton: $('build-button'),
+    status: $('status'),
+    themeDropdown: $('theme-dropdown'),
+    themeButton: $('theme-button'),
+    themeList: $('theme-list'),
+    resetColors: $('reset-colors'),
+    hideTitle: $('hide_title'),
+    customTitle: $('custom_title'),
+    days: $('days'),
+    from: $('from'),
+    to: $('to'),
+    rangeHint: $('range-hint'),
+    height: $('height'),
+    radius: $('radius'),
+    labels: $('labels'),
+    area: $('area'),
+    grid: $('grid'),
+    smooth: $('smooth'),
+    animate: $('animate'),
+    hideAxisTitles: $('hide_axis_titles'),
+    hideBorder: $('hide_border'),
+    preview: $('preview'),
+    previewImage: $('preview-image'),
+    markdown: $('markdown'),
+    copyButton: $('copy-button'),
+    openLink: $('open-link'),
+    themeToggle: $('theme-toggle'),
+};
+const colorInputs = [...document.querySelectorAll('input[type="color"][data-param]')];
+
+const state = {
+    username: '',
+    theme: { id: 'light', name: 'Light', bg: '00000000', border: 'd0d7de', title: 'ec4899', color: '24292f', line: '406cc4', point: 'ec4899', area: '406cc4' },
+    overrides: {}, // color params the user picked by hand: { line: 'ff0000', ... }
+    rendered: false, // whether the draw-in animation already played
+    objectUrl: '',
+    requestId: 0,
+};
+
+/* ---------- Helpers ---------- */
+
+const setStatus = (message, tone) => {
+    el.status.textContent = message || '';
+    if (tone) el.status.dataset.tone = tone;
+    else delete el.status.dataset.tone;
+};
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+// 'abc' / 'aabbcc' / 'aabbccdd' -> '#aabbcc' for <input type="color">
+const toPickerValue = (hex) => {
+    let h = hex.replace('#', '');
+    if (h.length === 3 || h.length === 4) h = [...h.slice(0, 3)].map((c) => c + c).join('');
+    return `#${h.slice(0, 6).padEnd(6, '0')}`;
+};
+// '#rrggbbaa' with alpha 00 -> 'transparent', otherwise '#hex' for CSS
+const toCss = (hex) => {
+    const h = hex.replace('#', '');
+    if ((h.length === 8 && h.endsWith('00')) || (h.length === 4 && h.endsWith('0')))
+        return 'transparent';
+    return `#${h}`;
+};
+
+// A server color ('#rrggbb', 'transparent' or 'rgba(r,g,b,a)') as hex without '#'.
+// A translucent color is shown as it looks over white.
+const fromServer = (value) => {
+    if (value === 'transparent') return '00000000';
+    if (value.startsWith('#')) return value.slice(1).toLowerCase();
+    const m = value.match(/rgba?\(([^)]+)\)/);
+    if (!m) return '888888';
+    const [r, g, b, a = 1] = m[1].split(',').map(Number);
+    return [r, g, b]
+        .map((c) => Math.round(255 - (255 - c) * a).toString(16).padStart(2, '0'))
+        .join('');
+};
+
+const themeFromServer = (t) => ({
+    id: t.id,
+    name:
+        THEME_NAMES[t.id] ||
+        t.id.replace(/(^|-)([a-z])/g, (_, gap, c) => (gap ? ' ' : '') + c.toUpperCase()),
+    bg: fromServer(t.bg_color),
+    border: fromServer(t.border_color),
+    title: fromServer(t.title_color),
+    color: fromServer(t.color),
+    line: fromServer(t.line),
+    point: fromServer(t.point),
+    area: fromServer(t.area_color),
+});
+
+const rangeMode = () => document.querySelector('input[name="range"]:checked').value;
+
+// The color shown in each swatch: the one picked by hand, else the theme's
+const effectiveColors = () => {
+    const t = state.theme;
+    const o = state.overrides;
+    return {
+        bg: o.bg_color || t.bg,
+        border: o.border_color || t.border,
+        title: o.title_color || t.title,
+        color: o.color || t.color,
+        line: o.line || t.line,
+        point: o.point || t.point,
+        area: o.area_color || t.area,
+    };
+};
+
+const dateRange = () => {
+    if (rangeMode() !== 'dates') return null;
+    const from = el.from.value;
+    const to = el.to.value;
+    if (!from || !to) return { error: 'Pick both dates.' };
+    if (from > to) return { error: '“From” must not be after “To”.' };
+    if (to > today()) return { error: 'Dates can’t be in the future.' };
+    const oldest = new Date(Date.now() - (MAX_DAYS - 1) * 86400000).toISOString().slice(0, 10);
+    if (from < oldest) return { error: `GitHub data here covers the last ${MAX_DAYS} days.` };
+    return { from, to };
+};
+
+// Every option of the graph URL, in a stable order. `forPreview` turns the
+// animation off once it has played, so changing a color does not replay it.
+const graphParams = (forPreview) => {
+    const params = new URLSearchParams({ username: state.username });
+    if (state.theme.id !== 'light') params.set('theme', state.theme.id);
+    for (const [param, value] of Object.entries(state.overrides)) params.set(param, value);
+
+    const range = dateRange();
+    if (range && range.from) {
+        params.set('from', range.from);
+        params.set('to', range.to);
+    } else if (rangeMode() === 'days' && Number(el.days.value) !== DEFAULT_DAYS) {
+        params.set('days', el.days.value);
+    }
+    if (Number(el.height.value) !== DEFAULT_HEIGHT) params.set('height', el.height.value);
+    if (Number(el.radius.value) > 0) params.set('radius', el.radius.value);
+    if (el.labels.value) params.set('labels', el.labels.value);
+    if (el.hideTitle.checked) params.set('hide_title', 'true');
+    else if (el.customTitle.value.trim()) params.set('custom_title', el.customTitle.value.trim());
+    if (el.area.checked) params.set('area', 'true');
+    if (!el.grid.checked) params.set('grid', 'false');
+    if (!el.smooth.checked) params.set('smooth', 'false');
+    if (el.hideAxisTitles.checked) params.set('hide_axis_titles', 'true');
+    if (el.hideBorder.checked) params.set('hide_border', 'true');
+    if (!el.animate.checked || (forPreview && state.rendered)) params.set('animate', 'false');
+    return params;
+};
+
+const graphUrl = (forPreview) => `${location.origin}/graph?${graphParams(forPreview)}`;
+
+/* ---------- Controls -> UI ---------- */
+
+const syncControls = () => {
+    const colors = effectiveColors();
+    colorInputs.forEach((input) => {
+        const param = input.dataset.param;
+        const value = colors[COLOR_PARAMS[param]];
+        input.value = toPickerValue(value);
+        const css = toCss(value);
+        const label = input.closest('.swatch').querySelector('code');
+        label.textContent = css === 'transparent' ? 'transparent' : toPickerValue(value);
+        input.closest('.swatch').classList.toggle('swatch--edited', param in state.overrides);
+        input.closest('.swatch').classList.toggle('swatch--transparent', css === 'transparent');
     });
-    COLORS.forEach(function (c) {
-      var v = (data.get(c[0]) || "").trim().replace(/^#/, "");
-      if (v) q.set(c[0], v);
+    el.resetColors.hidden = Object.keys(state.overrides).length === 0;
+
+    // filled part of each slider track
+    [el.days, el.height, el.radius].forEach((range) => {
+        const pct = ((range.value - range.min) / (range.max - range.min)) * 100;
+        range.style.setProperty('--fill', `${pct}%`);
     });
-    form.querySelectorAll("input[type=checkbox]").forEach(function (box) {
-      var on = box.dataset.default === "on";
-      if (box.checked !== on) q.set(box.name, box.checked ? "true" : "false");
+    $('days-value').textContent = el.days.value;
+    $('height-value').textContent = el.height.value;
+    $('radius-value').textContent = el.radius.value;
+    el.customTitle.disabled = el.hideTitle.checked;
+
+    const mode = rangeMode();
+    document.querySelector('[data-range="days"]').hidden = mode !== 'days';
+    document.querySelector('[data-range="dates"]').hidden = mode !== 'dates';
+    const range = dateRange();
+    el.rangeHint.textContent = range && range.error ? range.error : '';
+
+    el.preview.style.aspectRatio = `1200 / ${el.height.value}`;
+    // A transparent graph is shown on white, so dark text stays readable
+    el.preview.style.background = toCss(colors.bg) === 'transparent' ? '#ffffff' : '';
+};
+
+const updateMarkdown = () => {
+    if (!state.username) return;
+    const url = graphUrl(false);
+    el.markdown.value = `[![${state.username}'s GitHub contribution graph](${url})](${REPO})`;
+    el.copyButton.disabled = false;
+    el.openLink.href = url;
+    el.openLink.hidden = false;
+};
+
+/* ---------- Preview ---------- */
+
+const showSvg = (svg) => {
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+    const previous = state.objectUrl;
+    state.objectUrl = url;
+    el.previewImage.onload = () => previous && URL.revokeObjectURL(previous);
+    el.previewImage.src = url;
+    el.previewImage.alt = `${state.username}'s GitHub contribution graph`;
+    el.previewImage.hidden = false;
+    el.preview.dataset.state = 'ready';
+};
+
+const fetchGraph = async () => {
+    const url = graphUrl(true);
+    const id = ++state.requestId;
+    el.preview.dataset.state = state.rendered ? 'refreshing' : 'loading';
+    const response = await fetch(url);
+    const svg = await response.text();
+    if (id !== state.requestId) return false; // a newer request superseded this one
+    if (!response.ok) {
+        // The server answers with a small error SVG; surface its message
+        const message = new DOMParser()
+            .parseFromString(svg, 'image/svg+xml')
+            .querySelector('text')?.textContent;
+        throw new Error(message || `Request failed (${response.status})`);
+    }
+    showSvg(svg);
+    state.rendered = true;
+    return true;
+};
+
+const describeRange = () => {
+    const range = dateRange();
+    if (range && range.from) return `from ${range.from} to ${range.to}`;
+    return `for the last ${el.days.value} days`;
+};
+
+// Called whenever any control changes
+let layoutTimer;
+const onChange = () => {
+    syncControls();
+    updateMarkdown();
+    if (!state.username) return;
+
+    const range = dateRange();
+    if (range && range.error) return; // wait for a valid date range
+
+    clearTimeout(layoutTimer);
+    layoutTimer = setTimeout(async () => {
+        try {
+            if (await fetchGraph()) setStatus(`Showing ${state.username} ${describeRange()}.`);
+        } catch (error) {
+            el.preview.dataset.state = state.rendered ? 'ready' : 'empty';
+            setStatus(error.message, 'error');
+        }
+    }, 350);
+};
+
+/* ---------- Build ---------- */
+
+const setBusy = (busy) => {
+    el.buildButton.disabled = busy;
+    el.buildButton.dataset.busy = String(busy);
+    el.buildButton.textContent = busy ? 'Building…' : 'Build graph';
+};
+
+const build = async (event) => {
+    if (event) event.preventDefault();
+    const username = el.username.value.trim().replace(/^@/, '');
+    if (!username) {
+        setStatus('Enter a GitHub username first.', 'error');
+        el.username.focus();
+        return;
+    }
+    const range = dateRange();
+    if (range && range.error) {
+        setStatus(range.error, 'error');
+        return;
+    }
+
+    const previousUsername = state.username;
+    setBusy(true);
+    setStatus('Fetching contributions…');
+    state.username = username;
+    state.rendered = false; // play the animation for a new build
+    try {
+        if (await fetchGraph()) {
+            updateMarkdown();
+            setStatus(`Showing ${username} ${describeRange()}.`);
+        }
+    } catch (error) {
+        console.error(error);
+        state.username = previousUsername;
+        el.preview.dataset.state = state.rendered ? 'ready' : 'empty';
+        setStatus(error.message || 'Something went wrong. Please try again.', 'error');
+    } finally {
+        setBusy(false);
+    }
+};
+
+/* ---------- Theme dropdown ---------- */
+
+const chipStyle = (t) =>
+    `--chip-bg:${toCss(t.bg) === 'transparent' ? 'transparent' : toCss(t.bg)};` +
+    `--chip-line:${toCss(t.line)};--chip-point:${toCss(t.point)}`;
+
+const renderThemeList = () => {
+    el.themeList.innerHTML = THEMES.map(
+        (t, i) =>
+            `<li role="option" id="theme-opt-${i}" data-index="${i}" aria-selected="${t === state.theme}">` +
+            `<span class="theme-chip" style="${chipStyle(t)}" aria-hidden="true"></span>` +
+            `<span>${t.name}</span></li>`,
+    ).join('');
+};
+
+const syncThemeButton = () => {
+    el.themeButton.querySelector('.dropdown__value').textContent = state.theme.name;
+    el.themeButton.querySelector('.theme-chip').setAttribute('style', chipStyle(state.theme));
+};
+
+let activeIndex = 0;
+const setActive = (index) => {
+    activeIndex = (index + THEMES.length) % THEMES.length;
+    el.themeList.querySelectorAll('[role="option"]').forEach((li, i) => {
+        li.classList.toggle('is-active', i === activeIndex);
     });
-    return q.toString();
-  }
+    const active = $(`theme-opt-${activeIndex}`);
+    el.themeList.setAttribute('aria-activedescendant', active.id);
+    active.scrollIntoView({ block: 'nearest' });
+};
 
-  function setText(id, value) { document.getElementById(id).textContent = value; }
+const openDropdown = () => {
+    renderThemeList();
+    el.themeList.hidden = false;
+    el.themeButton.setAttribute('aria-expanded', 'true');
+    setActive(THEMES.indexOf(state.theme));
+    el.themeList.focus();
+};
 
-  var timer;
-  function update() {
-    clearTimeout(timer);
-    timer = setTimeout(render, 350);
-  }
+const closeDropdown = (focusButton = true) => {
+    if (el.themeList.hidden) return;
+    el.themeList.hidden = true;
+    el.themeButton.setAttribute('aria-expanded', 'false');
+    if (focusButton) el.themeButton.focus();
+};
 
-  function render() {
-    var q = query();
-    var path = "/graph?" + q;
-    var absolute = location.origin + path;
-    setText("url", absolute);
-    setText("md", "![Contribution graph](" + absolute + ")");
-    setText("html", '<img src="' + absolute + '" alt="Contribution graph">');
-    status.className = "status";
-    status.textContent = "Loading…";
-    fetch(path).then(function (res) {
-      return res.text().then(function (body) { return { ok: res.ok, status: res.status, body: body }; });
-    }).then(function (r) {
-      // Show what the server returned, errors included: they are SVG cards too.
-      img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(r.body);
-      status.className = r.ok ? "status" : "status error";
-      status.textContent = r.ok ? "" : "The server answered " + r.status + ".";
-    }).catch(function () {
-      status.className = "status error";
-      status.textContent = "Could not reach the server.";
-    });
-  }
+const chooseTheme = (index) => {
+    state.theme = THEMES[index];
+    state.overrides = {}; // a theme starts fresh
+    syncThemeButton();
+    closeDropdown();
+    onChange();
+};
 
-  form.addEventListener("input", update);
-  form.addEventListener("change", update);
-  form.addEventListener("submit", function (e) { e.preventDefault(); });
-  document.getElementById("reset").addEventListener("click", function () {
-    form.reset();
-    form.querySelectorAll("input[type=checkbox]").forEach(function (b) { b.checked = b.dataset.default === "on"; });
-    update();
-  });
-  document.querySelectorAll("[data-copy]").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var text = document.getElementById(btn.dataset.copy).textContent;
-      var done = function () { var old = btn.textContent; btn.textContent = "Copied"; setTimeout(function () { btn.textContent = old; }, 1200); };
-      if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () {});
-    });
-  });
+let typeahead = '';
+let typeaheadTimer;
+el.themeButton.addEventListener('click', () =>
+    el.themeList.hidden ? openDropdown() : closeDropdown(),
+);
+el.themeButton.addEventListener('keydown', (event) => {
+    if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) {
+        event.preventDefault();
+        openDropdown();
+    }
+});
+el.themeList.addEventListener('keydown', (event) => {
+    const keys = {
+        ArrowDown: () => setActive(activeIndex + 1),
+        ArrowUp: () => setActive(activeIndex - 1),
+        Home: () => setActive(0),
+        End: () => setActive(THEMES.length - 1),
+        Enter: () => chooseTheme(activeIndex),
+        ' ': () => chooseTheme(activeIndex),
+        Escape: () => closeDropdown(),
+        Tab: () => closeDropdown(false),
+    };
+    if (keys[event.key]) {
+        if (event.key !== 'Tab') event.preventDefault();
+        keys[event.key]();
+    } else if (event.key.length === 1) {
+        // type to jump to a theme
+        typeahead += event.key.toLowerCase();
+        clearTimeout(typeaheadTimer);
+        typeaheadTimer = setTimeout(() => (typeahead = ''), 600);
+        const match = THEMES.findIndex((t) => t.name.toLowerCase().startsWith(typeahead));
+        if (match >= 0) setActive(match);
+    }
+});
+el.themeList.addEventListener('click', (event) => {
+    const option = event.target.closest('[role="option"]');
+    if (option) chooseTheme(Number(option.dataset.index));
+});
+el.themeList.addEventListener('mousemove', (event) => {
+    const option = event.target.closest('[role="option"]');
+    if (option && Number(option.dataset.index) !== activeIndex)
+        setActive(Number(option.dataset.index));
+});
+document.addEventListener('pointerdown', (event) => {
+    if (!el.themeDropdown.contains(event.target)) closeDropdown(false);
+});
 
-  form.querySelectorAll("input[type=checkbox]").forEach(function (b) { b.checked = b.dataset.default === "on"; });
-  render();
-})();
+/* ---------- Other controls ---------- */
+
+colorInputs.forEach((input) =>
+    input.addEventListener('input', () => {
+        state.overrides[input.dataset.param] = input.value.slice(1);
+        onChange();
+    }),
+);
+el.resetColors.addEventListener('click', () => {
+    state.overrides = {};
+    onChange();
+});
+[el.hideTitle, el.area, el.grid, el.smooth, el.animate, el.hideAxisTitles, el.hideBorder, el.labels, el.from, el.to].forEach(
+    (input) => input.addEventListener('change', onChange),
+);
+[el.customTitle, el.days, el.height, el.radius].forEach((input) =>
+    input.addEventListener('input', onChange),
+);
+document
+    .querySelectorAll('input[name="range"]')
+    .forEach((input) => input.addEventListener('change', onChange));
+el.form.addEventListener('submit', build);
+
+/* ---------- Copy ---------- */
+
+el.copyButton.addEventListener('click', async () => {
+    if (!el.markdown.value) return;
+    try {
+        await navigator.clipboard.writeText(el.markdown.value);
+    } catch {
+        el.markdown.select();
+        document.execCommand('copy');
+    }
+    el.copyButton.textContent = 'Copied';
+    el.copyButton.dataset.copied = 'true';
+    setTimeout(() => {
+        el.copyButton.textContent = 'Copy';
+        delete el.copyButton.dataset.copied;
+    }, 1800);
+});
+
+/* ---------- Light / dark ---------- */
+
+const syncThemeToggle = () => {
+    const dark = document.documentElement.dataset.theme === 'dark';
+    el.themeToggle.textContent = dark ? '☼ Light' : '☾ Dark';
+    el.themeToggle.setAttribute('aria-label', `Switch to ${dark ? 'light' : 'dark'} theme`);
+};
+el.themeToggle.addEventListener('click', () => {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try {
+        localStorage.setItem('theme', next);
+    } catch {
+        /* storage unavailable */
+    }
+    syncThemeToggle();
+});
+
+/* ---------- Init ---------- */
+
+el.from.max = today();
+el.to.max = today();
+syncThemeToggle();
+
+const init = async () => {
+    try {
+        const response = await fetch('/themes');
+        THEMES = (await response.json()).map(themeFromServer);
+        if (THEMES.length) state.theme = THEMES[0];
+    } catch {
+        THEMES = [state.theme]; // the page still works with the default colors
+    }
+    syncThemeButton();
+    syncControls();
+    // /?username=octocat opens the page with that profile built
+    const name = new URLSearchParams(location.search).get('username');
+    if (name) {
+        el.username.value = name;
+        build();
+    }
+};
+init();
+
 </script>
-</body>
+    </body>
 </html>

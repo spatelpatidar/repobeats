@@ -1,9 +1,9 @@
-use serde::{Deserialize, Deserializer, de::Error as _};
+use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 use thiserror::Error;
 
 use super::colors::ColorScheme;
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CardTheme {
     #[default]

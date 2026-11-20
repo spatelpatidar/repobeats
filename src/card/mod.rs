@@ -9,4 +9,5 @@ pub use options::{CardKind, CardOptions, CardSize, CardTheme, PeriodDays, Period
 pub use render::{
     CardRenderError, CardRenderer, GraphError, SvgCardRenderer, graph_dates, render,
     render_contributors, render_graph, render_graph_error, render_languages, render_overview,
+    theme_colors,
 };

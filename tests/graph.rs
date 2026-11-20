@@ -542,3 +542,22 @@ fn usernames_are_validated() {
         assert!(parse_username(bad).is_err(), "{bad:?}");
     }
 }
+
+#[test]
+fn theme_colors_list_every_graph_color() {
+    let colors = repobeats::card::theme_colors(CardOptions::default());
+    let names: Vec<_> = colors.iter().map(|(name, _)| *name).collect();
+    assert_eq!(
+        names,
+        [
+            "bg_color",
+            "border_color",
+            "title_color",
+            "color",
+            "line",
+            "point",
+            "area_color"
+        ]
+    );
+    assert!(colors.iter().all(|(_, value)| !value.is_empty()));
+}

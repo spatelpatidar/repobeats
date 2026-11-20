@@ -84,6 +84,23 @@ impl Colors {
     }
 }
 
+/// The graph colors of a theme as `(name, "#rrggbb")` pairs, for the params
+/// page: `bg_color`, `border_color`, `title_color`, `color`, `line`, `point`
+/// and `area_color`.
+pub fn theme_colors(card: CardOptions) -> [(&'static str, String); 7] {
+    let palette = Palette::resolve(&card);
+    let colors = Colors::resolve(&palette, &GraphColors::default(), false);
+    [
+        ("bg_color", colors.background),
+        ("border_color", colors.border),
+        ("title_color", colors.title),
+        ("color", colors.text),
+        ("line", colors.line),
+        ("point", colors.point),
+        ("area_color", colors.area),
+    ]
+}
+
 /// Draws the contribution graph of `calendar`. `today` (UTC) is the last day
 /// of a `days=N` range.
 ///
