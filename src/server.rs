@@ -30,7 +30,7 @@ use chrono::{Duration as Days, NaiveDate, Utc};
 use repobeats::{
     card::{
         CardOptions, CardSize, CardTheme, GraphOptions, graph_dates, render_graph,
-        render_graph_error,
+        render_graph_error, theme_colors,
     },
     collector::Collector,
     domain::parse_username,
@@ -194,6 +194,37 @@ async fn page() -> Html<&'static str> {
     Html(PAGE)
 }
 
+/// The colors of every theme, so the page can show them as swatches.
+async fn themes() -> Response {
+    let list = CardTheme::ALL
+        .iter()
+        .map(|theme| {
+            let id = serde_json::to_value(theme)
+                .ok()
+                .and_then(|value| value.as_str().map(str::to_owned))
+                .unwrap_or_default();
+            let card = CardOptions {
+                theme: *theme,
+                ..CardOptions::default()
+            };
+            let mut entry = serde_json::Map::new();
+            entry.insert("id".into(), id.into());
+            for (name, color) in theme_colors(card) {
+                entry.insert(name.into(), color.into());
+            }
+            serde_json::Value::Object(entry)
+        })
+        .collect::<Vec<_>>();
+    (
+        [
+            (header::CONTENT_TYPE, "application/json"),
+            (header::CACHE_CONTROL, "public, max-age=3600"),
+        ],
+        serde_json::Value::Array(list).to_string(),
+    )
+        .into_response()
+}
+
 async fn health() -> &'static str {
     "ok"
 }
@@ -221,6 +252,7 @@ async fn main() -> Result<()> {
     let router = Router::new()
         .route("/", get(page))
         .route("/graph", get(graph))
+        .route("/themes", get(themes))
         .route("/healthz", get(health))
         .with_state(app);
 

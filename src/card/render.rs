@@ -13,7 +13,9 @@ use super::{CardOptions, CardTheme, ColorScheme, PeriodDays, Rgb};
 
 mod extra;
 mod graph;
-pub use graph::{GraphError, graph_dates, render_error as render_graph_error, render_graph};
+pub use graph::{
+    GraphError, graph_dates, render_error as render_graph_error, render_graph, theme_colors,
+};
 
 use crate::model::{ActivitySnapshot, ContributorActivity, DailyActivity};
 pub use extra::{render_contributors, render_languages, render_overview};
