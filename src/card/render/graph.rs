@@ -489,7 +489,7 @@ fn select(
 const MIN_TICK_SPACE: f64 = 18.0;
 
 /// Tick step and axis top for the highest daily count on a plot `plot_height`
-/// tall. The step is the smallest of 1, 2, 5, 10, 20, 50 ... that still leaves
+/// tall. The step is the smallest of 1, 2, 4, 5, 10, 20, 40, 50 ... that leaves
 /// `MIN_TICK_SPACE` between ticks, so the axis gets finer as the graph gets
 /// taller and coarser as the numbers grow (the way Chartist, which
 /// github-readme-activity-graph uses, sizes its axis). Ticks are whole
@@ -501,7 +501,7 @@ fn nice_scale(max: u32, plot_height: f64) -> (u32, u32) {
     let max = u64::from(max);
     let mut magnitude = 1_u64;
     loop {
-        for factor in [1, 2, 5] {
+        for factor in [1, 2, 4, 5] {
             let step = factor * magnitude;
             let intervals = max.div_ceil(step);
             if step >= max || plot_height / intervals as f64 >= MIN_TICK_SPACE {
@@ -649,6 +649,10 @@ mod tests {
         assert_eq!(nice_scale(12, tall), (2, 12));
         assert_eq!(nice_scale(15, tall), (2, 16));
         assert_eq!(nice_scale(20, tall), (2, 20));
+        assert_eq!(nice_scale(30, tall), (4, 32));
+        assert_eq!(nice_scale(40, tall), (4, 40));
+        assert_eq!(nice_scale(50, tall), (5, 50));
+        assert_eq!(nice_scale(60, tall), (10, 60));
         assert_eq!(nice_scale(100, tall), (10, 100));
         assert_eq!(nice_scale(101, tall), (10, 110));
         assert_eq!(nice_scale(1_234, tall), (200, 1_400));
