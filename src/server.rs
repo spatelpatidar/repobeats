@@ -39,6 +39,8 @@ use repobeats::{
 };
 
 const PAGE: &str = include_str!("../web/index.html");
+const LOGO: &str = include_str!("../assets/logo.svg");
+const MAINLOGO: &str = include_str!("../assets/main-logo.svg");
 const MAX_CACHE_ENTRIES: usize = 500;
 /// One request fetches this many days, so every `days`, `from` and `to`
 /// choice for a user is answered from the same cached calendar.
@@ -225,6 +227,29 @@ async fn themes() -> Response {
         .into_response()
 }
 
+/// The logo, shown in the page header and as its icon.
+async fn logo() -> Response {
+    (
+        [
+            (header::CONTENT_TYPE, "image/svg+xml"),
+            (header::CACHE_CONTROL, "public, max-age=86400"),
+        ],
+        LOGO,
+    )
+        .into_response()
+}
+
+async fn main_logo() -> Response {
+    (
+        [
+            (header::CONTENT_TYPE, "image/svg+xml"),
+            (header::CACHE_CONTROL, "public, max-age=86400"),
+        ],
+        MAINLOGO,
+    )
+        .into_response()
+}
+
 async fn health() -> &'static str {
     "ok"
 }
@@ -253,6 +278,8 @@ async fn main() -> Result<()> {
         .route("/", get(page))
         .route("/graph", get(graph))
         .route("/themes", get(themes))
+        .route("/logo.svg", get(logo))
+        .route("/main-logo.svg", get(main_logo))
         .route("/healthz", get(health))
         .with_state(app);
 

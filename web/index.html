@@ -8,7 +8,7 @@
             name="description"
             content="Build a contribution graph for any GitHub profile and embed it as an SVG."
         />
-        <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M1 12l4-5 3 3 4-6 3 4' fill='none' stroke='%232156d9' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+        <link rel="icon" type="image/svg+xml" href="/logo.svg" />
         <!-- Set the color theme before first paint to avoid a flash (dark unless the visitor chose light) -->
         <script>
             (function () {
@@ -1050,6 +1050,7 @@ input[type='range']:focus-visible::-webkit-slider-thumb {
     cursor: pointer;
 }
 
+.theme-toggle { display: inline-flex; align-items: center; gap: 6px; }
 .theme-toggle:hover {
     background: color-mix(in srgb, var(--text) 10%, transparent);
 }
@@ -1147,7 +1148,7 @@ select.input { appearance: auto; }
     <body>
         <header class="topbar">
             <a class="topbar__brand" href="./">
-                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M1 12l4-5 3 3 4-6 3 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <img src="/logo.svg" alt="" width="20" height="20" />
                 <span>Repobeats</span>
             </a>
             <nav class="topbar__nav" aria-label="Project">
@@ -1457,7 +1458,7 @@ select.input { appearance: auto; }
                     <h3>Customization <span aria-hidden="true">↗</span></h3>
                     <p>Every URL option: days, dates, labels, colors, height.</p>
                 </a>
-                <a class="links__item" href="https://github.com/spatelpatidar/repobeats#contribution-graph">
+                <a class="links__item" href="https://github.com/spatelpatidar/repobeats#use-it">
                     <h3>GitHub Action <span aria-hidden="true">↗</span></h3>
                     <p>Write the graph into your profile repo on a schedule.</p>
                 </a>
@@ -1479,7 +1480,7 @@ select.input { appearance: auto; }
                     (MIT). Design inspired by <a href="https://zed.dev" rel="noopener">zed.dev</a></span
                 >
                 <span class="dot" aria-hidden="true">•</span>
-                <button type="button" class="theme-toggle" id="theme-toggle"></button>
+                <button type="button" class="theme-toggle" id="theme-toggle"><svg class="theme-toggle__icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"></svg><span class="theme-toggle__label"></span></button>
             </footer>
         </main>
 
@@ -1955,10 +1956,19 @@ el.copyButton.addEventListener('click', async () => {
 
 /* ---------- Light / dark ---------- */
 
+const SUN =
+    '<circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/>' +
+    '<path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>';
+const MOON =
+    '<path d="M13.5 9.6A5.6 5.6 0 0 1 6.4 2.5a5.6 5.6 0 1 0 7.1 7.1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>';
+
+// The icon and word show the theme you are in now (sun: light, moon: dark).
 const syncThemeToggle = () => {
     const dark = document.documentElement.dataset.theme === 'dark';
-    el.themeToggle.textContent = dark ? '☼ Light' : '☾ Dark';
+    el.themeToggle.querySelector('.theme-toggle__icon').innerHTML = dark ? MOON : SUN;
+    el.themeToggle.querySelector('.theme-toggle__label').textContent = dark ? 'Dark' : 'Light';
     el.themeToggle.setAttribute('aria-label', `Switch to ${dark ? 'light' : 'dark'} theme`);
+    el.themeToggle.title = `Switch to ${dark ? 'light' : 'dark'} theme`;
 };
 el.themeToggle.addEventListener('click', () => {
     const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
