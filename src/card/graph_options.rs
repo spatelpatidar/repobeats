@@ -13,6 +13,7 @@
 //! | `custom_title` | Replace the title                                    |                  |
 //! | `labels`       | x-axis labels: `auto` (day numbers), `date`, `number`, `sideways`, `none` | `auto` |
 //! | `hide_axis_titles` | Drop the "Days" and "Contributions" axis titles | `false`          |
+//! | `hide_summary` | Drop the "520 contributions · Aug 23 – Nov 20" row   | `false`          |
 //! | `hide_border`  | No border                                            | `false`          |
 //! | `radius`       | Corner radius, 0 to 16 (clamped)                     | `0`              |
 //! | `height`       | Height in card units, 200 to 600 (clamped)           | `420`            |
@@ -98,6 +99,7 @@ pub struct GraphOptions {
     pub hide_title: bool,
     pub labels: LabelMode,
     pub hide_axis_titles: bool,
+    pub hide_summary: bool,
     pub hide_border: bool,
     pub title: Option<String>,
     pub radius: u32,
@@ -115,6 +117,7 @@ impl Default for GraphOptions {
             hide_title: false,
             labels: LabelMode::Auto,
             hide_axis_titles: false,
+            hide_summary: false,
             hide_border: false,
             title: None,
             radius: 0,
@@ -177,6 +180,7 @@ impl GraphOptions {
                 "hide_axis_titles" => {
                     options.hide_axis_titles = parse_bool("hide_axis_titles", value)?;
                 }
+                "hide_summary" => options.hide_summary = parse_bool("hide_summary", value)?,
                 "hide_border" => options.hide_border = parse_bool("hide_border", value)?,
                 "custom_title" => options.title = Some(value.to_owned()),
                 "radius" => {

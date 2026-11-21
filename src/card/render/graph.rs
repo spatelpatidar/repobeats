@@ -36,6 +36,10 @@ const Y_OFFSET: f64 = 70.0;
 const X_OFFSET: f64 = 50.0;
 /// Closest two value-axis ticks may be (the reference's `scaleMinSpace`).
 const SCALE_MIN_SPACE: f64 = 20.0;
+/// Rough widths of one title (20px, 600 weight) and summary (14px) character,
+/// to tell whether the summary fits beside the title.
+const TITLE_CHAR_WIDTH: f64 = 11.5;
+const SUMMARY_CHAR_WIDTH: f64 = 7.4;
 /// Longest custom title, in characters.
 const TITLE_LIMIT: usize = 64;
 
@@ -136,6 +140,7 @@ pub fn render_graph(
     let mut body = String::with_capacity(16_000);
 
     // Title: centered on the card.
+    let mut title_half_width = 0.0;
     if !graph.hide_title {
         let title = match &graph.title {
             Some(title) => ellipsize(title, TITLE_LIMIT),
@@ -144,6 +149,7 @@ pub fn render_graph(
                 calendar.name.as_deref().unwrap_or(&calendar.login)
             ),
         };
+        title_half_width = title.chars().count() as f64 * TITLE_CHAR_WIDTH / 2.0;
         text(
             &mut body,
             Anchor::Middle,
@@ -151,6 +157,27 @@ pub fn render_graph(
             "sans header",
             &colors.title,
             &title,
+        );
+    }
+
+    // Summary row: the total for the plotted days and their date range. It
+    // sits at the right of the title row, or under a title too long to share it.
+    if !graph.hide_summary {
+        let summary = summary_text(&days);
+        let width = summary.chars().count() as f64 * SUMMARY_CHAR_WIDTH;
+        let fits = WIDTH / 2.0 + title_half_width + 24.0 < x2 - width;
+        let (anchor, position) = if fits || graph.hide_title {
+            (Anchor::End, (x2, 42.0))
+        } else {
+            (Anchor::Middle, (WIDTH / 2.0, 64.0))
+        };
+        text(
+            &mut body,
+            anchor,
+            position,
+            "sans summary",
+            &colors.text,
+            &summary,
         );
     }
 
@@ -326,7 +353,7 @@ pub fn render_graph(
 
 /// Text sizes and the grid, line, area and point styles of the reference
 /// (`graphStyle.ts`). Labels are 12px, 600 weight.
-const GRAPH_STYLE: &str = ".header{font-size:20px;font-weight:600}.label{font-size:12px;font-weight:600}.ct-grid{stroke-width:1px;stroke-opacity:.3;stroke-dasharray:2px}.ct-line{stroke-width:4px;stroke-linecap:butt}.ct-area{stroke:none;fill-opacity:.1}.ct-point{stroke-width:10px;stroke-linecap:round}";
+const GRAPH_STYLE: &str = ".header{font-size:20px;font-weight:600}.summary{font-size:14px;font-weight:400}.label{font-size:12px;font-weight:600}.ct-grid{stroke-width:1px;stroke-opacity:.3;stroke-dasharray:2px}.ct-line{stroke-width:4px;stroke-linecap:butt}.ct-area{stroke:none;fill-opacity:.1}.ct-point{stroke-width:10px;stroke-linecap:round}";
 
 /// Points slide in from the left and fade up over one second, all together.
 const GRAPH_POINT_ANIMATION: &str = ".ct-point{animation:blink 1s ease-in-out both}@keyframes blink{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}";
@@ -533,6 +560,37 @@ fn bounds(axis_length: f64, mut high: f64, mut low: f64, scale_min_space: f64) -
         range: max - min,
         values,
     }
+}
+
+/// `520 contributions · Aug 23 – Nov 20`: the total of the plotted days and
+/// their first and last date (with the year when the range spans years).
+fn summary_text(days: &[(NaiveDate, u32)]) -> String {
+    let total = days.iter().map(|(_, count)| u64::from(*count)).sum::<u64>();
+    let digits = total.to_string();
+    let mut grouped = String::new();
+    for (index, digit) in digits.chars().enumerate() {
+        if index > 0 && (digits.len() - index) % 3 == 0 {
+            grouped.push(',');
+        }
+        grouped.push(digit);
+    }
+    let noun = if total == 1 {
+        "contribution"
+    } else {
+        "contributions"
+    };
+    let (Some((first, _)), Some((last, _))) = (days.first(), days.last()) else {
+        return format!("{grouped} {noun}");
+    };
+    let years = first.year() != last.year();
+    if first == last {
+        return format!("{grouped} {noun} · {}", short_date(*first, years));
+    }
+    format!(
+        "{grouped} {noun} · {} – {}",
+        short_date(*first, years),
+        short_date(*last, years)
+    )
 }
 
 /// `Nov 3`, or `Nov 3 '25` when the range spans years.
