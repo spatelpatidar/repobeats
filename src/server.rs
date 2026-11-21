@@ -239,7 +239,7 @@ async fn logo() -> Response {
         .into_response()
 }
 
-async fn mainLogo -> Response {
+async fn main_logo() -> Response {
     (
         [
             (header::CONTENT_TYPE, "image/svg+xml"),
@@ -279,7 +279,7 @@ async fn main() -> Result<()> {
         .route("/graph", get(graph))
         .route("/themes", get(themes))
         .route("/logo.svg", get(logo))
-        .route("/main-logo.svg", get(mainLogo))
+        .route("/main-logo.svg", get(main_logo))
         .route("/healthz", get(health))
         .with_state(app);
 
