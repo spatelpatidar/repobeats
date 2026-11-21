@@ -41,13 +41,45 @@ Generated weekly by [`showcase.yml`](.github/workflows/showcase.yml) and stored 
 
 **Themes** (`theme:`), shown on the activity card
 
-<img alt="light theme" width="400" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-light.svg">
-<img alt="dark theme" width="400" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-dark.svg">
-<img alt="github-dimmed theme" width="400" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-github-dimmed.svg">
-<img alt="dracula theme" width="400" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-dracula.svg">
-<img alt="nord theme" width="400" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-nord.svg">
-<img alt="tokyo-night theme" width="400" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-tokyo-night.svg">
-<img alt="solarized-light theme" width="400" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-solarized-light.svg">
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img alt="light theme" width="100%" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-light.svg"><br>
+      <sub><code>light</code></sub>
+    </td>
+    <td width="50%" align="center">
+      <img alt="dark theme" width="100%" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-dark.svg"><br>
+      <sub><code>dark</code></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img alt="github-dimmed theme" width="100%" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-github-dimmed.svg"><br>
+      <sub><code>github-dimmed</code></sub>
+    </td>
+    <td width="50%" align="center">
+      <img alt="dracula theme" width="100%" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-dracula.svg"><br>
+      <sub><code>dracula</code></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img alt="nord theme" width="100%" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-nord.svg"><br>
+      <sub><code>nord</code></sub>
+    </td>
+    <td width="50%" align="center">
+      <img alt="tokyo-night theme" width="100%" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-tokyo-night.svg"><br>
+      <sub><code>tokyo-night</code></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img alt="solarized-light theme" width="100%" src="https://raw.githubusercontent.com/spatelpatidar/repobeats/output/activity-solarized-light.svg"><br>
+      <sub><code>solarized-light</code></sub>
+    </td>
+    <td width="50%"></td>
+  </tr>
+</table>
 
 ## Use it
 
@@ -182,6 +214,7 @@ If `user` is empty, the owner of the repository the workflow runs in is used. On
 | `custom_title` | `Name's Contribution Graph` | Up to 64 characters, longer is cut. The name is the profile name, else the username. |
 | `labels` | `auto` | How days are written under the x axis: `auto` (the day of the month, like github-readme-activity-graph), `date` (`Nov 9`), `number` (`14`, `15`), `sideways` (dates written sideways) or `none`. Every style labels every day, so long ranges run together. |
 | `hide_axis_titles` | `false` | Remove the "Days" and "Contributions" axis titles. |
+| `hide_summary` | `false` | Remove the summary row at the top right, for example `520 contributions · Aug 23 – Nov 20` (the total and the date range of the plotted days). |
 | `hide_border` | `false` | No border. |
 | `radius` | `0` | Corner radius, 0 to 16 (larger values are set to 16). |
 | `height` | `420` | 200 to 600 (out-of-range values are clamped). The width follows `size`. |

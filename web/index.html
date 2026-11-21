@@ -1395,6 +1395,10 @@ select.input { appearance: auto; }
                                 <span>Animate</span>
                             </label>
                             <label class="toggle">
+                                <input type="checkbox" id="hide_summary" />
+                                <span>Hide summary row</span>
+                            </label>
+                            <label class="toggle">
                                 <input type="checkbox" id="hide_axis_titles" />
                                 <span>Hide axis titles</span>
                             </label>
@@ -1536,6 +1540,7 @@ const el = {
     smooth: $('smooth'),
     animate: $('animate'),
     hideAxisTitles: $('hide_axis_titles'),
+    hideSummary: $('hide_summary'),
     hideBorder: $('hide_border'),
     preview: $('preview'),
     previewImage: $('preview-image'),
@@ -1658,6 +1663,7 @@ const graphParams = (forPreview) => {
     if (!el.grid.checked) params.set('grid', 'false');
     if (!el.smooth.checked) params.set('smooth', 'false');
     if (el.hideAxisTitles.checked) params.set('hide_axis_titles', 'true');
+    if (el.hideSummary.checked) params.set('hide_summary', 'true');
     if (el.hideBorder.checked) params.set('hide_border', 'true');
     if (!el.animate.checked || (forPreview && state.rendered)) params.set('animate', 'false');
     return params;
@@ -1925,7 +1931,7 @@ el.resetColors.addEventListener('click', () => {
     state.overrides = {};
     onChange();
 });
-[el.hideTitle, el.area, el.grid, el.smooth, el.animate, el.hideAxisTitles, el.hideBorder, el.labels, el.from, el.to].forEach(
+[el.hideTitle, el.area, el.grid, el.smooth, el.animate, el.hideAxisTitles, el.hideSummary, el.hideBorder, el.labels, el.from, el.to].forEach(
     (input) => input.addEventListener('change', onChange),
 );
 [el.customTitle, el.days, el.height, el.radius].forEach((input) =>

@@ -561,3 +561,87 @@ fn theme_colors_list_every_graph_color() {
     );
     assert!(colors.iter().all(|(_, value)| !value.is_empty()));
 }
+
+/// The text of the summary row, if the card has one.
+fn summary(svg: &str) -> Option<String> {
+    let start = svg.find("class=\"sans summary\"")?;
+    let rest = &svg[start..];
+    let begin = rest.find('>')? + 1;
+    Some(rest[begin..rest.find("</text>")?].to_owned())
+}
+
+#[test]
+fn summary_row_shows_the_total_and_the_date_range() {
+    // days=5 ends today (Nov 13) and counts 1, 2, 3, 4 and 5.
+    assert_eq!(
+        summary(&render("days=5")).as_deref(),
+        Some("15 contributions · Nov 9 – Nov 13")
+    );
+    // A range spanning two years writes the years.
+    let long = summary(&render("days=365")).unwrap();
+    assert!(long.contains("'25") && long.contains("'26"), "{long}");
+    // The row follows the plotted range, not the whole calendar.
+    assert_eq!(
+        summary(&render("from=2026-11-10&to=2026-11-12")).as_deref(),
+        Some("9 contributions · Nov 10 – Nov 12")
+    );
+}
+
+#[test]
+fn summary_row_handles_one_day_and_big_totals() {
+    assert_eq!(
+        summary(&render_with_peak(1, "days=1")).as_deref(),
+        Some("1 contribution · Nov 13")
+    );
+    assert_eq!(
+        summary(&render_with_peak(1_234, "days=1")).as_deref(),
+        Some("1,234 contributions · Nov 13")
+    );
+    assert_eq!(
+        summary(&render_with_peak(0, "days=1")).as_deref(),
+        Some("0 contributions · Nov 13")
+    );
+}
+
+#[test]
+fn summary_row_can_be_hidden_and_never_changes_the_graph() {
+    assert!(options("hide_summary=true").hide_summary);
+    assert!(!options("").hide_summary);
+    let with = render("days=31");
+    let without = render("days=31&hide_summary=true");
+    assert!(summary(&with).is_some() && summary(&without).is_none());
+    // Everything else is the same: only the summary text is gone.
+    let strip = |svg: &str| {
+        let start = svg.find("<text class=\"sans summary\"").unwrap_or(0);
+        let end = start + svg[start..].find("</text>").map_or(0, |end| end + 7);
+        format!("{}{}", &svg[..start], &svg[end..])
+    };
+    assert_eq!(strip(&with), without);
+}
+
+#[test]
+fn summary_row_moves_under_a_long_title() {
+    let long = "A very long custom title that fills most of the card width";
+    let svg = render(&format!(
+        "days=31&custom_title={}",
+        long.replace(' ', "%20")
+    ));
+    let start = svg.find("class=\"sans summary\"").unwrap();
+    let row =
+        &svg[svg[..start].rfind("<text").unwrap()..start + svg[start..].find("</text>").unwrap()];
+    // Centered under the title instead of at the right.
+    assert!(
+        row.contains("text-anchor=\"middle\"") && row.contains("y=\"64.0\""),
+        "{row}"
+    );
+    // A short title shares the row, with the summary at the right edge.
+    let short = render("days=31");
+    let start = short.find("class=\"sans summary\"").unwrap();
+    let row = &short
+        [short[..start].rfind("<text").unwrap()..start + short[start..].find("</text>").unwrap()];
+    assert!(
+        row.contains("text-anchor=\"end\"") && row.contains("y=\"42.0\""),
+        "{row}"
+    );
+    assert_finite(&svg);
+}
